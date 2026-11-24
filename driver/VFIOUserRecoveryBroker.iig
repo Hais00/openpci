@@ -1,0 +1,12 @@
+#ifndef VFIOUserRecoveryBroker_h
+#define VFIOUserRecoveryBroker_h
+#include <Availability.h>
+#include <DriverKit/IOService.iig>
+class VFIOUserRecoveryBroker: public IOService
+{
+public:
+    virtual kern_return_t Start(IOService *provider) override;
+    virtual kern_return_t Stop(IOService *provider) override;
+    virtual kern_return_t NewUserClient(uint32_t type, IOUserClient **userClient) override;
+};
+#endif

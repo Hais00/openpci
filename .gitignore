@@ -1,0 +1,9 @@
+/build/
+/driver/DirectBARPublicKey.local.hpp
+*.p12
+*.mobileprovision
+*.provisionprofile
+*.pem
+*.key
+__pycache__/
+.DS_Store

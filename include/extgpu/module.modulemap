@@ -1,0 +1,7 @@
+module ExtGPU {
+  header "extgpu.h"
+  link "extgpu"
+  link framework "IOKit"
+  link framework "CoreFoundation"
+  export *
+}

@@ -1,0 +1,11 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: extgpu
+Description: OpenPCI direct macOS IOKit host PCI/DMA/IRQ client SDK (ABI 1)
+Version: @PROJECT_VERSION@
+Libs: -L"${libdir}" -lextgpu
+Libs.private: -framework IOKit -framework CoreFoundation
+Cflags: -I"${includedir}"

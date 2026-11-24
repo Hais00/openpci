@@ -1,0 +1,566 @@
+// !$*UTF8*$!
+{
+	"archiveVersion" = "1";
+	"classes" = {
+	};
+	"objectVersion" = "77";
+	"objects" = {
+		"4141A0002F70D00100C53A34" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "wrapper.framework";
+			"name" = "SystemExtensions.framework";
+			"path" = "System/Library/Frameworks/SystemExtensions.framework";
+			"sourceTree" = "SDKROOT";
+		};
+		"4141A0012F70D00100C53A34" = {
+			"fileRef" = "4141A0002F70D00100C53A34";
+			"isa" = "PBXBuildFile";
+		};
+		"416AAFEA2F6BD59100C53A34" = {
+			"children" = (
+				"416AAFF52F6BD59100C53A34",
+				"416AB00A2F6BD5FB00C53A34",
+				"416AB0072F6BD5FB00C53A34",
+				"416AAFF42F6BD59100C53A34",
+			);
+			"isa" = "PBXGroup";
+			"sourceTree" = "<group>";
+		};
+		"416AAFEB2F6BD59100C53A34" = {
+			"attributes" = {
+				"BuildIndependentTargetsInParallel" = "1";
+				"LastSwiftUpdateCheck" = "2630";
+				"LastUpgradeCheck" = "2630";
+				"TargetAttributes" = {
+					"416AAFF22F6BD59100C53A34" = {
+						"CreatedOnToolsVersion" = "26.3";
+					};
+					"416AB0052F6BD5FB00C53A34" = {
+						"CreatedOnToolsVersion" = "26.3";
+					};
+				};
+			};
+			"buildConfigurationList" = "416AAFEE2F6BD59100C53A34";
+			"developmentRegion" = "en";
+			"hasScannedForEncodings" = "0";
+			"isa" = "PBXProject";
+			"knownRegions" = (
+				"en",
+				"Base",
+			);
+			"mainGroup" = "416AAFEA2F6BD59100C53A34";
+			"minimizedProjectReferenceProxies" = "1";
+			"preferredProjectObjectVersion" = "77";
+			"productRefGroup" = "416AAFF42F6BD59100C53A34";
+			"projectDirPath" = "";
+			"projectRoot" = "";
+			"targets" = (
+				"416AAFF22F6BD59100C53A34",
+				"416AB0052F6BD5FB00C53A34",
+			);
+		};
+		"416AAFEE2F6BD59100C53A34" = {
+			"buildConfigurations" = (
+				"416AAFFC2F6BD59300C53A34",
+				"416AAFFD2F6BD59300C53A34",
+			);
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+			"isa" = "XCConfigurationList";
+		};
+		"416AAFEF2F6BD59100C53A34" = {
+			"buildActionMask" = "2147483647";
+			"files" = (
+			);
+			"isa" = "PBXSourcesBuildPhase";
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"416AAFF02F6BD59100C53A34" = {
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"4141A0012F70D00100C53A34",
+			);
+			"isa" = "PBXFrameworksBuildPhase";
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"416AAFF12F6BD59100C53A34" = {
+			"buildActionMask" = "2147483647";
+			"files" = (
+			);
+			"isa" = "PBXResourcesBuildPhase";
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"416AAFF22F6BD59100C53A34" = {
+			"buildConfigurationList" = "416AAFFE2F6BD59300C53A34";
+			"buildPhases" = (
+				"416AAFEF2F6BD59100C53A34",
+				"416AAFF02F6BD59100C53A34",
+				"416AAFF12F6BD59100C53A34",
+				"416AB0172F6BD5FB00C53A34",
+			);
+			"buildRules" = (
+			);
+			"dependencies" = (
+				"416AB0112F6BD5FB00C53A34",
+			);
+			"fileSystemSynchronizedGroups" = (
+				"416AAFF52F6BD59100C53A34",
+			);
+			"isa" = "PBXNativeTarget";
+			"name" = "OpenPCI";
+			"packageProductDependencies" = (
+			);
+			"productName" = "OpenPCI";
+			"productReference" = "416AAFF32F6BD59100C53A34";
+			"productType" = "com.apple.product-type.application";
+		};
+		"416AAFF32F6BD59100C53A34" = {
+			"explicitFileType" = "wrapper.application";
+			"includeInIndex" = "0";
+			"isa" = "PBXFileReference";
+			"path" = "OpenPCI.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"416AAFF42F6BD59100C53A34" = {
+			"children" = (
+				"416AAFF32F6BD59100C53A34",
+				"416AB0062F6BD5FB00C53A34",
+			);
+			"isa" = "PBXGroup";
+			"name" = "Products";
+			"sourceTree" = "<group>";
+		};
+		"416AAFF52F6BD59100C53A34" = {
+			"isa" = "PBXFileSystemSynchronizedRootGroup";
+			"path" = "installer";
+			"sourceTree" = "<group>";
+		};
+		"416AAFFC2F6BD59300C53A34" = {
+			"buildSettings" = {
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS" = "YES";
+				"CLANG_ANALYZER_NONNULL" = "YES";
+				"CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION" = "YES_AGGRESSIVE";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "c++17";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"CLANG_ENABLE_OBJC_WEAK" = "YES";
+				"CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING" = "YES";
+				"CLANG_WARN_BOOL_CONVERSION" = "YES";
+				"CLANG_WARN_COMMA" = "YES";
+				"CLANG_WARN_CONSTANT_CONVERSION" = "YES";
+				"CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS" = "YES";
+				"CLANG_WARN_DIRECT_OBJC_ISA_USAGE" = "YES_ERROR";
+				"CLANG_WARN_DOCUMENTATION_COMMENTS" = "YES";
+				"CLANG_WARN_EMPTY_BODY" = "YES";
+				"CLANG_WARN_ENUM_CONVERSION" = "YES";
+				"CLANG_WARN_INFINITE_RECURSION" = "YES";
+				"CLANG_WARN_INT_CONVERSION" = "YES";
+				"CLANG_WARN_NON_LITERAL_NULL_CONVERSION" = "YES";
+				"CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF" = "YES";
+				"CLANG_WARN_OBJC_LITERAL_CONVERSION" = "YES";
+				"CLANG_WARN_OBJC_ROOT_CLASS" = "YES_ERROR";
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "YES";
+				"CLANG_WARN_RANGE_LOOP_ANALYSIS" = "YES";
+				"CLANG_WARN_STRICT_PROTOTYPES" = "YES";
+				"CLANG_WARN_SUSPICIOUS_MOVE" = "YES";
+				"CLANG_WARN_UNGUARDED_AVAILABILITY" = "YES_AGGRESSIVE";
+				"CLANG_WARN_UNREACHABLE_CODE" = "YES";
+				"CLANG_WARN__DUPLICATE_METHOD_MATCH" = "YES";
+				"COPY_PHASE_STRIP" = "NO";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"ENABLE_STRICT_OBJC_MSGSEND" = "YES";
+				"ENABLE_TESTABILITY" = "YES";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "NO";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"GCC_DYNAMIC_NO_PIC" = "NO";
+				"GCC_NO_COMMON_BLOCKS" = "YES";
+				"GCC_OPTIMIZATION_LEVEL" = "0";
+				"GCC_PREPROCESSOR_DEFINITIONS" = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				"GCC_WARN_64_TO_32_BIT_CONVERSION" = "YES";
+				"GCC_WARN_ABOUT_RETURN_TYPE" = "YES_ERROR";
+				"GCC_WARN_UNDECLARED_SELECTOR" = "YES";
+				"GCC_WARN_UNINITIALIZED_AUTOS" = "YES_AGGRESSIVE";
+				"GCC_WARN_UNUSED_FUNCTION" = "YES";
+				"GCC_WARN_UNUSED_VARIABLE" = "YES";
+				"LOCALIZATION_PREFERS_STRING_CATALOGS" = "YES";
+				"MACOSX_DEPLOYMENT_TARGET" = "26.2";
+				"MTL_ENABLE_DEBUG_INFO" = "INCLUDE_SOURCE";
+				"MTL_FAST_MATH" = "YES";
+				"ONLY_ACTIVE_ARCH" = "YES";
+				"SDKROOT" = "macosx";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG $(inherited)";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+			};
+			"isa" = "XCBuildConfiguration";
+			"name" = "Debug";
+		};
+		"416AAFFD2F6BD59300C53A34" = {
+			"buildSettings" = {
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS" = "YES";
+				"CLANG_ANALYZER_NONNULL" = "YES";
+				"CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION" = "YES_AGGRESSIVE";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "c++17";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"CLANG_ENABLE_OBJC_WEAK" = "YES";
+				"CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING" = "YES";
+				"CLANG_WARN_BOOL_CONVERSION" = "YES";
+				"CLANG_WARN_COMMA" = "YES";
+				"CLANG_WARN_CONSTANT_CONVERSION" = "YES";
+				"CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS" = "YES";
+				"CLANG_WARN_DIRECT_OBJC_ISA_USAGE" = "YES_ERROR";
+				"CLANG_WARN_DOCUMENTATION_COMMENTS" = "YES";
+				"CLANG_WARN_EMPTY_BODY" = "YES";
+				"CLANG_WARN_ENUM_CONVERSION" = "YES";
+				"CLANG_WARN_INFINITE_RECURSION" = "YES";
+				"CLANG_WARN_INT_CONVERSION" = "YES";
+				"CLANG_WARN_NON_LITERAL_NULL_CONVERSION" = "YES";
+				"CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF" = "YES";
+				"CLANG_WARN_OBJC_LITERAL_CONVERSION" = "YES";
+				"CLANG_WARN_OBJC_ROOT_CLASS" = "YES_ERROR";
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "YES";
+				"CLANG_WARN_RANGE_LOOP_ANALYSIS" = "YES";
+				"CLANG_WARN_STRICT_PROTOTYPES" = "YES";
+				"CLANG_WARN_SUSPICIOUS_MOVE" = "YES";
+				"CLANG_WARN_UNGUARDED_AVAILABILITY" = "YES_AGGRESSIVE";
+				"CLANG_WARN_UNREACHABLE_CODE" = "YES";
+				"CLANG_WARN__DUPLICATE_METHOD_MATCH" = "YES";
+				"COPY_PHASE_STRIP" = "NO";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+				"ENABLE_NS_ASSERTIONS" = "NO";
+				"ENABLE_STRICT_OBJC_MSGSEND" = "YES";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "NO";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"GCC_NO_COMMON_BLOCKS" = "YES";
+				"GCC_WARN_64_TO_32_BIT_CONVERSION" = "YES";
+				"GCC_WARN_ABOUT_RETURN_TYPE" = "YES_ERROR";
+				"GCC_WARN_UNDECLARED_SELECTOR" = "YES";
+				"GCC_WARN_UNINITIALIZED_AUTOS" = "YES_AGGRESSIVE";
+				"GCC_WARN_UNUSED_FUNCTION" = "YES";
+				"GCC_WARN_UNUSED_VARIABLE" = "YES";
+				"LOCALIZATION_PREFERS_STRING_CATALOGS" = "YES";
+				"MACOSX_DEPLOYMENT_TARGET" = "26.2";
+				"MTL_ENABLE_DEBUG_INFO" = "NO";
+				"MTL_FAST_MATH" = "YES";
+				"SDKROOT" = "macosx";
+				"SWIFT_COMPILATION_MODE" = "wholemodule";
+			};
+			"isa" = "XCBuildConfiguration";
+			"name" = "Release";
+		};
+		"416AAFFE2F6BD59300C53A34" = {
+			"buildConfigurations" = (
+				"416AAFFF2F6BD59300C53A34",
+				"416AB0002F6BD59300C53A34",
+			);
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+			"isa" = "XCConfigurationList";
+		};
+		"416AAFFF2F6BD59300C53A34" = {
+			"buildSettings" = {
+				"ARCHS" = "arm64";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
+				"CODE_SIGN_ENTITLEMENTS" = "installer/VFIOUserHostApp.entitlements";
+				"CODE_SIGN_IDENTITY" = "$(READY_SIGNING_IDENTITY)";
+				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "YES";
+				"CODE_SIGN_STYLE" = "Manual";
+				"COMBINE_HIDPI_IMAGES" = "YES";
+			"CURRENT_PROJECT_VERSION" = "69";
+				"DEVELOPMENT_TEAM" = "$(READY_TEAM_ID)";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"INFOPLIST_KEY_NSHumanReadableCopyright" = "";
+				"INFOPLIST_KEY_NSSystemExtensionUsageDescription" = "Installs the external AMD/NVIDIA/Intel GPU PCI transport for authorized native clients.";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				"MACOSX_DEPLOYMENT_TARGET" = "26.0";
+			"MARKETING_VERSION" = "1.29";
+				"ONLY_ACTIVE_ARCH" = "NO";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "org.openpci.app";
+				"PRODUCT_NAME" = "OpenPCI";
+				"PROVISIONING_PROFILE_SPECIFIER" = "$(READY_APP_PROFILE)";
+				"SDKROOT" = "macosx";
+				"STRING_CATALOG_GENERATE_SYMBOLS" = "YES";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+				"SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY" = "YES";
+				"SWIFT_VERSION" = "5.0";
+			};
+			"isa" = "XCBuildConfiguration";
+			"name" = "Debug";
+		};
+		"416AB0002F6BD59300C53A34" = {
+			"buildSettings" = {
+				"ARCHS" = "arm64";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
+				"CODE_SIGN_ENTITLEMENTS" = "installer/VFIOUserHostApp.entitlements";
+				"CODE_SIGN_IDENTITY" = "$(READY_SIGNING_IDENTITY)";
+				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "YES";
+				"CODE_SIGN_STYLE" = "Manual";
+				"COMBINE_HIDPI_IMAGES" = "YES";
+			"CURRENT_PROJECT_VERSION" = "69";
+				"DEVELOPMENT_TEAM" = "$(READY_TEAM_ID)";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"INFOPLIST_KEY_NSHumanReadableCopyright" = "";
+				"INFOPLIST_KEY_NSSystemExtensionUsageDescription" = "Installs the external AMD/NVIDIA/Intel GPU PCI transport for authorized native clients.";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				"MACOSX_DEPLOYMENT_TARGET" = "26.0";
+			"MARKETING_VERSION" = "1.29";
+				"ONLY_ACTIVE_ARCH" = "NO";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "org.openpci.app";
+				"PRODUCT_NAME" = "OpenPCI";
+				"PROVISIONING_PROFILE_SPECIFIER" = "$(READY_APP_PROFILE)";
+				"SDKROOT" = "macosx";
+				"STRING_CATALOG_GENERATE_SYMBOLS" = "YES";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+				"SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY" = "YES";
+				"SWIFT_VERSION" = "5.0";
+			};
+			"isa" = "XCBuildConfiguration";
+			"name" = "Release";
+		};
+		"416AB0012F6BD5FB00C53A34" = {
+			"buildActionMask" = "2147483647";
+			"files" = (
+			);
+			"isa" = "PBXHeadersBuildPhase";
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"416AB0022F6BD5FB00C53A34" = {
+			"buildActionMask" = "2147483647";
+			"files" = (
+			);
+			"isa" = "PBXSourcesBuildPhase";
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"416AB0032F6BD5FB00C53A34" = {
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"416AB0092F6BD5FB00C53A34",
+				"416AB0182F6C0D0A00C53A34",
+			);
+			"isa" = "PBXFrameworksBuildPhase";
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"416AB0042F6BD5FB00C53A34" = {
+			"buildActionMask" = "2147483647";
+			"files" = (
+			);
+			"isa" = "PBXResourcesBuildPhase";
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"416AB0052F6BD5FB00C53A34" = {
+			"buildConfigurationList" = "416AB0142F6BD5FB00C53A34";
+			"buildPhases" = (
+				"416AB0012F6BD5FB00C53A34",
+				"416AB0022F6BD5FB00C53A34",
+				"416AB0032F6BD5FB00C53A34",
+				"416AB0042F6BD5FB00C53A34",
+			);
+			"buildRules" = (
+			);
+			"dependencies" = (
+			);
+			"fileSystemSynchronizedGroups" = (
+				"416AB00A2F6BD5FB00C53A34",
+			);
+			"isa" = "PBXNativeTarget";
+			"name" = "VFIOUserPCIDriver";
+			"packageProductDependencies" = (
+			);
+			"productName" = "VFIOUserPCIDriver";
+			"productReference" = "416AB0062F6BD5FB00C53A34";
+			"productType" = "com.apple.product-type.driver-extension";
+		};
+		"416AB0062F6BD5FB00C53A34" = {
+			"explicitFileType" = "wrapper.driver-extension";
+			"includeInIndex" = "0";
+			"isa" = "PBXFileReference";
+			"path" = "org.openpci.driver.dext";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"416AB0072F6BD5FB00C53A34" = {
+			"children" = (
+				"4141A0002F70D00100C53A34",
+				"416AB0082F6BD5FB00C53A34",
+				"416AB0192F6C0D0A00C53A34",
+				"41CC10092F71D00100C53A34",
+			);
+			"isa" = "PBXGroup";
+			"name" = "Frameworks";
+			"sourceTree" = "<group>";
+		};
+		"416AB0082F6BD5FB00C53A34" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "wrapper.framework";
+			"name" = "DriverKit.framework";
+			"path" = "System/Library/Frameworks/DriverKit.framework";
+			"sourceTree" = "SDKROOT";
+		};
+		"416AB0092F6BD5FB00C53A34" = {
+			"fileRef" = "416AB0082F6BD5FB00C53A34";
+			"isa" = "PBXBuildFile";
+		};
+		"416AB00A2F6BD5FB00C53A34" = {
+			"exceptions" = (
+				"416AB0132F6BD5FB00C53A34",
+			);
+			"isa" = "PBXFileSystemSynchronizedRootGroup";
+			"path" = "driver";
+			"sourceTree" = "<group>";
+		};
+		"416AB0102F6BD5FB00C53A34" = {
+			"containerPortal" = "416AAFEB2F6BD59100C53A34";
+			"isa" = "PBXContainerItemProxy";
+			"proxyType" = "1";
+			"remoteGlobalIDString" = "416AB0052F6BD5FB00C53A34";
+			"remoteInfo" = "VFIOUserPCIDriver";
+		};
+		"416AB0112F6BD5FB00C53A34" = {
+			"isa" = "PBXTargetDependency";
+			"target" = "416AB0052F6BD5FB00C53A34";
+			"targetProxy" = "416AB0102F6BD5FB00C53A34";
+		};
+		"416AB0122F6BD5FB00C53A34" = {
+			"fileRef" = "416AB0062F6BD5FB00C53A34";
+			"isa" = "PBXBuildFile";
+			"settings" = {
+				"ATTRIBUTES" = (
+					"RemoveHeadersOnCopy",
+				);
+			};
+		};
+		"416AB0132F6BD5FB00C53A34" = {
+			"isa" = "PBXFileSystemSynchronizedBuildFileExceptionSet";
+			"membershipExceptions" = (
+				"Info.plist",
+				"IMPLEMENTATION.txt",
+				"implementation-status.json",
+				"preflight.json",
+				"source-origin.json",
+				"source-validation.json",
+			);
+			"target" = "416AB0052F6BD5FB00C53A34";
+		};
+		"416AB0142F6BD5FB00C53A34" = {
+			"buildConfigurations" = (
+				"416AB0152F6BD5FB00C53A34",
+				"416AB0162F6BD5FB00C53A34",
+			);
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+			"isa" = "XCConfigurationList";
+		};
+		"416AB0152F6BD5FB00C53A34" = {
+			"buildSettings" = {
+				"ARCHS" = "arm64";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "c++17";
+				"CODE_SIGN_ENTITLEMENTS" = "$(READY_DRIVER_ENTITLEMENTS)";
+				"CODE_SIGN_IDENTITY" = "$(READY_SIGNING_IDENTITY)";
+				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "YES";
+				"CODE_SIGN_STYLE" = "Manual";
+			"CURRENT_PROJECT_VERSION" = "69";
+				"DEVELOPMENT_TEAM" = "$(READY_TEAM_ID)";
+				"DRIVERKIT_DEPLOYMENT_TARGET" = "25.2";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"HEADER_SEARCH_PATHS" = (
+					"$(inherited)",
+					"$(DERIVED_FILE_DIR)",
+					"$(SRCROOT)/include",
+				);
+				"INFOPLIST_FILE" = "driver/Info.plist";
+				"INFOPLIST_KEY_OSBundleUsageDescription" = "Generic external GPU PCI transport; vendor initialization remains in Linux or the authorized native client.";
+			"MARKETING_VERSION" = "1.29";
+				"ONLY_ACTIVE_ARCH" = "NO";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "org.openpci.driver";
+				"PRODUCT_NAME" = "$(PRODUCT_BUNDLE_IDENTIFIER)";
+				"PROVISIONING_PROFILE_SPECIFIER" = "$(READY_DRIVER_PROFILE)";
+				"RUN_CLANG_STATIC_ANALYZER" = "YES";
+				"SDKROOT" = "driverkit";
+				"SKIP_INSTALL" = "YES";
+				"STRING_CATALOG_GENERATE_SYMBOLS" = "YES";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+				"READY_DRIVER_ENTITLEMENTS" = "driver/VFIOUserPCIDriver.entitlements";
+			};
+			"isa" = "XCBuildConfiguration";
+			"name" = "Debug";
+		};
+		"416AB0162F6BD5FB00C53A34" = {
+			"buildSettings" = {
+				"ARCHS" = "arm64";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "c++17";
+				"CODE_SIGN_ENTITLEMENTS" = "$(READY_DRIVER_ENTITLEMENTS)";
+				"CODE_SIGN_IDENTITY" = "$(READY_SIGNING_IDENTITY)";
+				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "YES";
+				"CODE_SIGN_STYLE" = "Manual";
+			"CURRENT_PROJECT_VERSION" = "69";
+				"DEVELOPMENT_TEAM" = "$(READY_TEAM_ID)";
+				"DRIVERKIT_DEPLOYMENT_TARGET" = "25.2";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"HEADER_SEARCH_PATHS" = (
+					"$(inherited)",
+					"$(DERIVED_FILE_DIR)",
+					"$(SRCROOT)/include",
+				);
+				"INFOPLIST_FILE" = "driver/Info.plist";
+				"INFOPLIST_KEY_OSBundleUsageDescription" = "Generic external GPU PCI transport; vendor initialization remains in Linux or the authorized native client.";
+			"MARKETING_VERSION" = "1.29";
+				"ONLY_ACTIVE_ARCH" = "NO";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "org.openpci.driver";
+				"PRODUCT_NAME" = "$(PRODUCT_BUNDLE_IDENTIFIER)";
+				"PROVISIONING_PROFILE_SPECIFIER" = "$(READY_DRIVER_PROFILE)";
+				"RUN_CLANG_STATIC_ANALYZER" = "YES";
+				"SDKROOT" = "driverkit";
+				"SKIP_INSTALL" = "YES";
+				"STRING_CATALOG_GENERATE_SYMBOLS" = "YES";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+				"READY_DRIVER_ENTITLEMENTS" = "driver/VFIOUserPCIDriver.entitlements";
+			};
+			"isa" = "XCBuildConfiguration";
+			"name" = "Release";
+		};
+		"416AB0172F6BD5FB00C53A34" = {
+			"buildActionMask" = "2147483647";
+			"dstPath" = "$(SYSTEM_EXTENSIONS_FOLDER_PATH)";
+			"dstSubfolderSpec" = "16";
+			"files" = (
+				"416AB0122F6BD5FB00C53A34",
+			);
+			"isa" = "PBXCopyFilesBuildPhase";
+			"name" = "Embed System Extensions";
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"416AB0182F6C0D0A00C53A34" = {
+			"fileRef" = "416AB0192F6C0D0A00C53A34";
+			"isa" = "PBXBuildFile";
+		};
+		"416AB0192F6C0D0A00C53A34" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "wrapper.framework";
+			"name" = "PCIDriverKit.framework";
+			"path" = "System/Library/Frameworks/PCIDriverKit.framework";
+			"sourceTree" = "SDKROOT";
+		};
+		"41CC10092F71D00100C53A34" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "wrapper.framework";
+			"name" = "IOKit.framework";
+			"path" = "System/Library/Frameworks/IOKit.framework";
+			"sourceTree" = "SDKROOT";
+		};
+	};
+	"rootObject" = "416AAFEB2F6BD59100C53A34";
+}

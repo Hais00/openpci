@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.developer.driverkit</key>
+	<true/>
+	<key>com.apple.developer.driverkit.transport.pci</key>
+	<array>
+		<dict>
+			<key>IOPCIClassMatch</key>
+			<string>0x03000000&amp;0xff000000</string>
+			<key>IOPCIPrimaryMatch</key>
+			<string>0x00001002&amp;0x0000ffff</string>
+		</dict>
+		<dict>
+			<key>IOPCIClassMatch</key>
+			<string>0x03000000&amp;0xff000000</string>
+			<key>IOPCIPrimaryMatch</key>
+			<string>0x000010de&amp;0x0000ffff</string>
+		</dict>
+		<dict>
+			<key>IOPCIClassMatch</key>
+			<string>0x03000000&amp;0xff000000</string>
+			<key>IOPCIPrimaryMatch</key>
+			<string>0x00008086&amp;0x0000ffff</string>
+		</dict>
+		<dict>
+			<key>IOPCIClassMatch</key>
+			<string>0x04030000&amp;0xffffff00</string>
+			<key>IOPCIPrimaryMatch</key>
+			<string>0xaaf81002</string>
+		</dict>
+		<dict>
+			<key>IOPCIClassMatch</key>
+			<string>0x04030000&amp;0xffffff00</string>
+			<key>IOPCIPrimaryMatch</key>
+			<string>0x1aef10de</string>
+		</dict>
+		<dict>
+			<key>IOPCIClassMatch</key>
+			<string>0x04030000&amp;0xffffff00</string>
+			<key>IOPCIPrimaryMatch</key>
+			<string>0xaaf01002</string>
+		</dict>
+	</array>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+</dict>
+</plist>

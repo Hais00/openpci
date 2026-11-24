@@ -1,0 +1,16 @@
+#ifndef VFIOUserRecoveryUserClient_h
+#define VFIOUserRecoveryUserClient_h
+#include <Availability.h>
+#include <DriverKit/IOUserClient.iig>
+class VFIOUserRecoveryUserClient: public IOUserClient
+{
+public:
+    virtual void free() override LOCALONLY;
+    virtual kern_return_t Start(IOService *provider) override;
+    virtual kern_return_t Stop(IOService *provider) override;
+    virtual kern_return_t ExternalMethod(uint64_t selector, IOUserClientMethodArguments *arguments,
+        const IOUserClientMethodDispatch *dispatch, OSObject *target, void *reference) override;
+    virtual kern_return_t CopyClientMemoryForType(uint64_t type, uint64_t *options,
+                                                  IOMemoryDescriptor **memory) override;
+};
+#endif

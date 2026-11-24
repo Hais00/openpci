@@ -1,0 +1,18 @@
+#ifndef OPENPCI_DRIVER_SERVICE_IIG
+#define OPENPCI_DRIVER_SERVICE_IIG
+
+#include <DriverKit/IOService.iig>
+
+// PCI display and companion personalities share this service. The service
+// publishes a live provider before an application can request a connection.
+class VFIOUserPCIDriver : public IOService {
+public:
+    kern_return_t Start(IOService *provider) override;
+
+    // The display service exposes type zero. Companions participate in reset.
+    kern_return_t NewUserClient(uint32_t type, IOUserClient **connection) override;
+
+    kern_return_t Stop(IOService *provider) override;
+};
+
+#endif
