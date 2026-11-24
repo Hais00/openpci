@@ -27,7 +27,7 @@ swift tools/create_direct_bar_key.swift \
   "$HOME/.config/openpci/direct-bar.key" driver/DirectBARPublicKey.local.hpp
 ```
 
-Keep the private key with the Ready operator. The DEXT embeds the generated public key. See [SDK usage](sdk/README.md) for device ownership and release requirements.
+See [SDK usage](sdk/README.md) for device ownership and release requirements.
 
 ## License
 
