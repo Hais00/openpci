@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #ifndef OPENPCI_PRIVATE_IRQ_MAILBOX_H
 #define OPENPCI_PRIVATE_IRQ_MAILBOX_H
 

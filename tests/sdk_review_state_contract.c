@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * Review regressions against actual SDK logic with private transport injection.
  * No device is opened and no GPU/driver RPC is performed. IRQ close exercises
  * real Darwin notification ports and GCD source cancellation only. */

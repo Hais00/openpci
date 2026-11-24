@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * CPU-only DriverKit/SDK transport. One serialized producer per claim.
  */
 #ifndef OPENPCI_PRIVATE_MMIO_RING_H

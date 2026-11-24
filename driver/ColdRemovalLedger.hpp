@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * Bounded terminal DMA retirement policy. Caller serializes every operation and
  * owns the preallocated entry storage for the entire authenticated endpoint
  * lifetime. No allocation, physical observation or platform API occurs here.

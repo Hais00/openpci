@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * Read-only example: exact service protocol/identity, no automatic claim. */
 #include <extgpu/extgpu.h>
 #include <inttypes.h>

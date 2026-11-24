@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * Public SDK only. Enumeration is the default; ownership requires two flags.
  */
 #include <extgpu/extgpu.h>

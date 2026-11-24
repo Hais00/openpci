@@ -31,4 +31,4 @@ Keep the private key with the Ready operator. The DEXT embeds the generated publ
 
 ## License
 
-The SDK uses the [MIT license](LICENSES/SDK-MIT.txt). The DriverKit and installer sources are published for inspection and local builds. Additional redistribution terms for those components have not been specified.
+The OpenPCI DriverKit extension, installer and SDK in this repository are available under the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use requires separate permission from the copyright holder. See [NOTICE](NOTICE) and the [historical license grants](LICENSES/History.md).

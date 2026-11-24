@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * Embedding example; no main, device discovery/claim or GPU submission. */
 #include "owned_region.h"
 #include <stdlib.h>

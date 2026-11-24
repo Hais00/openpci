@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * Deliberately simulated public SDK for native-probe's command/lifetime tests.
  * This fixture is never linked into the real native probe. No IOKit or GPU. */
 #define _POSIX_C_SOURCE 200809L

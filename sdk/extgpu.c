@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * Original host SDK implementation. The wire ABI is described separately in
  * extgpu_driver_abi.h. No QEMU or broker participates in this data path. */
 #include <extgpu/extgpu.h>

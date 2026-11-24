@@ -46,7 +46,8 @@ def active_jobs() -> list[dict]:
 
 
 def input_files() -> list[dict]:
-    files = [ROOT / 'CMakeLists.txt', ROOT / 'cmake/extGPUConfig.cmake.in', Path(__file__).resolve()]
+    files = [ROOT / 'LICENSE', ROOT / 'NOTICE', ROOT / 'CMakeLists.txt',
+             ROOT / 'cmake/extGPUConfig.cmake.in', Path(__file__).resolve()]
     files.extend(p for p in (ROOT / 'LICENSES').glob('*') if p.is_file())
     files.extend(p for p in (ROOT / 'driver').glob('*.hpp') if p.is_file())
     for folder in ('include', 'sdk', 'tests'):

@@ -1,5 +1,7 @@
 # OpenPCI host C SDK
 
+Current SDK source and binaries are offered under PolyForm Noncommercial 1.0.0. The SDK package includes the license and copyright notice.
+
 This library calls the OpenPCI DriverKit user client directly through public macOS IOKit APIs. It has no socket service, broker, QEMU dependency, or frame-copy path. The SDK builds with the macOS CLT SDK; building the separate driver requires DriverKit.
 
 The public header is C11/C++17, with fixed-width status values and opaque ownership handles. Public structure layouts in ABI 1 are frozen. `extgpu_sdk_abi_version()` must equal `EXTGPU_SDK_ABI_VERSION`; the shared library has ABI version 1. Future minor releases use new types/functions instead of extending these structures.

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #ifndef EXTGPU_H
 #define EXTGPU_H
 #include <stdbool.h>

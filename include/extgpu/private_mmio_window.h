@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * Driver/SDK wire payload. No PCI or DMA memory is shared with the client.
  */
 #ifndef OPENPCI_PRIVATE_MMIO_WINDOW_H

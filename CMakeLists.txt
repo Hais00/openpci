@@ -63,7 +63,7 @@ install(TARGETS extgpu extgpu_shared EXPORT extGPUTargets
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES include/extgpu/extgpu.h include/extgpu/module.modulemap
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/extgpu)
-install(FILES LICENSES/SDK-MIT.txt sdk/README.md
+install(FILES LICENSE NOTICE sdk/README.md
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/ext-GPU-SDK)
 install(EXPORT extGPUTargets NAMESPACE extGPU:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/extGPU)
 configure_file(sdk/extgpu.pc.in "${CMAKE_CURRENT_BINARY_DIR}/extgpu.pc" @ONLY)

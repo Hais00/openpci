@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * PRIVATE test injection. Not installed, not present in production builds. */
 #ifndef EXTGPU_TEST_H
 #define EXTGPU_TEST_H

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * Platform-independent resource retirement used by the actual DriverKit code.
  * This does not emulate DriverKit: operations call the real DMA objects in the
  * extension, and tests inject only the success/failure of those operations. */

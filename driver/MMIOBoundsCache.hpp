@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * Positive BAR bounds policy shared by DriverKit and CPU-only fault tests.
  * The caller holds its provider state lock through validation AND typed I/O.
  * No descriptor, mapping, PCI register access or platform ABI belongs here.

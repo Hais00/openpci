@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #ifndef EXTGPU_EXAMPLE_OWNED_REGION_H
 #define EXTGPU_EXAMPLE_OWNED_REGION_H
 #include <extgpu/extgpu.h>
