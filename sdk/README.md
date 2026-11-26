@@ -117,6 +117,16 @@ same IOUserServer process to remain alive. Process death has no reconstruction
 fallback: missing broker/native acknowledgements retain the obligation.
 This API performs no automatic reset, restart, power action or teardown.
 
+The native VMM can opt into surprise removal with a protocol 1.30 driver.
+It binds recovery to the original PCI device and its tunnel bridge before
+creating DMA mappings. On driver and tunnel removal it stops the guest and
+unmaps BARs from the guest and task. The broker then drains the stopped
+driver's IRQ sources and releases the original DMA mappings with
+`CompleteDMA`. An exact broker acknowledgement precedes freeing guest RAM
+or opening a new session. A failed or missing acknowledgement retains the
+original backing. Normal release also closes the escrow.
+
+
 Destroy children first: stop application IRQ activity, mask/drain/close IRQ, unmap BARs, stop GPU references and unregister buffers, release owner, close device, destroy session. Cleanup errors preserve handles and ownership. `extgpu_device_close` refuses a claimed device or live child. Release uses the explicit selector-19 acknowledgement, never deprecated service-terminate selector 2 and never a guessed success from `IOServiceClose`. The current driver conservatively rejects release after any BAR mapping has been issued because it cannot observe authoritative revocation of those mappings. After DMA/hardware mutation, safe release additionally depends on the driver's actual reset/quiescence result. Unsupported or failed release means keep the device handle; it is not an invitation to force-close it.
 
 IRQ delivery uses a private serial dispatch source receiving IOKit asynchronous Mach messages. With a one-shot IRQ, the callback explicitly sets up the next notification. SDK 1.5 adds `extgpu_irq_drain_and_rearm`, which takes the pending bits and installs the next callback in one request on compatible drivers. On earlier drivers it issues the original drain and rearm requests. The individual functions remain available for callers that want to defer rearming.

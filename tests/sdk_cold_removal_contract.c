@@ -4,6 +4,8 @@
 #include <extgpu/extgpu_driver_abi.h>
 #include <IOKit/IOReturn.h>
 #include <IOKit/IOTypes.h>
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -25,9 +27,10 @@ typedef struct fake_driver {
     uint64_t generation, minor, capabilities, key[5], enrolled, private_cap[2];
     uint64_t broker_id, broker_actual_id, broker_caps, broker_minor, broker_epoch, first_escrow_input[7];
     const char *broker_class;
-    unsigned calls[32], maps, unmaps, closes, retire_commits, finish_commits;
-    unsigned broker_calls[32], broker_lookups, broker_opens, broker_closes, original_drops;
-    bool claimed, frozen, finished, allocated, fail_map, fail_close;
+    unsigned calls[52], maps, unmaps, closes, retire_commits, finish_commits;
+    unsigned broker_calls[52], broker_lookups, broker_opens, broker_closes, original_drops;
+    bool claimed, frozen, finished, allocated, fail_map, fail_close, fail_bar_unmap;
+    void *bar;
     bool prepared, broker_bound, original_gone, broker_gone, bind_wrong_owner, escrow_input_seen;
     uint32_t fail_selector, malformed_selector;
     uint32_t broker_fail_selector, broker_malformed_selector, fail_before_selector;
@@ -90,7 +93,7 @@ static int32_t scalar(void *opaque, uint32_t selector, const uint64_t *in,
                       uint32_t count, uint64_t *out, uint32_t *capacity)
 {
     fake_driver *f = opaque;
-    CHECK(selector < 32);
+    CHECK(selector < 52);
     ++f->calls[selector];
     if (f->original_gone) return kIOReturnNoDevice;
     if (selector == EXTGPU_SELECTOR_PREPARE_RECOVERY_ESCROW) {
@@ -165,6 +168,7 @@ static int32_t scalar(void *opaque, uint32_t selector, const uint64_t *in,
         uint64_t reply[3] = {f->broker_id, 1, 3};
         return emit(f, selector, out, capacity, reply, 3);
     }
+    case EXTGPU_SELECTOR_ARM_SURPRISE_REMOVAL:
     case EXTGPU_SELECTOR_PREPARE_RECOVERY_ESCROW: {
         CHECK(count == 7 && f->claimed && in[0] == f->generation);
         CHECK(in[1] == 5001 && in[2] == 9001 && (in[3] || in[4]) && (in[5] || in[6]));
@@ -213,7 +217,7 @@ static int32_t broker_scalar(void *opaque, uint32_t selector, const uint64_t *in
                              uint32_t count, uint64_t *out, uint32_t *capacity)
 {
     fake_driver *f = opaque;
-    CHECK(selector < 32 && f->broker_opens == 1); ++f->broker_calls[selector];
+    CHECK(selector < 52 && f->broker_opens == 1); ++f->broker_calls[selector];
     if (f->broker_gone) return kIOReturnNoDevice;
     switch (selector) {
     case EXTGPU_SELECTOR_QUERY_PROTOCOL: {
@@ -256,6 +260,23 @@ static int32_t broker_scalar(void *opaque, uint32_t selector, const uint64_t *in
         }
         return kIOReturnNotFound;
     }
+    case EXTGPU_SELECTOR_RELEASE_SURPRISE_REMOVAL: {
+        CHECK(count == EXTGPU_SURPRISE_RELEASE_INPUT_COUNT && f->broker_bound &&
+              !memcmp(in, f->key, sizeof(f->key)));
+        if (in[5]) {
+            CHECK(f->original_gone);
+            if (f->native_retire_failure) return f->native_retire_failure;
+            for (unsigned n = 0; n < 4; ++n) if (f->regions[n].registered) {
+                f->regions[n].registered = false;
+                ++f->retire_commits;
+            }
+            f->claimed = false;
+        } else CHECK(!f->claimed);
+        if (!f->finished) { f->finished = true; ++f->finish_commits; }
+        uint64_t reply[EXTGPU_SURPRISE_RELEASE_OUTPUT_COUNT];
+        memcpy(reply, in, sizeof(reply));
+        return broker_emit(f, selector, out, capacity, reply, EXTGPU_SURPRISE_RELEASE_OUTPUT_COUNT);
+    }
     case EXTGPU_SELECTOR_COLD_FINISH: {
         CHECK(count == 6 && f->frozen && !registered_count(f) && in[5] == 3);
         CHECK(!memcmp(in, f->key, sizeof(f->key)));
@@ -278,6 +299,11 @@ static int32_t map(void *opaque, uint32_t type, uint64_t *address, uint64_t *byt
     CHECK(!f->frozen);
     ++f->maps;
     if (f->fail_map) return kIOReturnUnsupported;
+    if (type == EXTGPU_MEMORY_BAR0 && f->bar) {
+        *address = (uintptr_t)f->bar;
+        *bytes = (uint64_t)getpagesize();
+        return kIOReturnSuccess;
+    }
     CHECK(type == EXTGPU_MEMORY_DMA_BUFFER && f->allocated && f->allocation);
     *address = (uintptr_t)f->allocation;
     *bytes = f->allocation_bytes;
@@ -286,6 +312,12 @@ static int32_t map(void *opaque, uint32_t type, uint64_t *address, uint64_t *byt
 static int32_t unmap(void *opaque, uint32_t type, uint64_t address)
 {
     fake_driver *f = opaque;
+    if (type == EXTGPU_MEMORY_BAR0 && f->bar) {
+        CHECK(f->original_gone && address == (uintptr_t)f->bar);
+        if (f->fail_bar_unmap) return kIOReturnNotReady;
+        f->bar = NULL;
+        return kIOReturnSuccess;
+    }
     CHECK(!f->frozen && type == EXTGPU_MEMORY_DMA_BUFFER && address == (uintptr_t)f->allocation);
     ++f->unmaps;
     return kIOReturnSuccess;
@@ -370,7 +402,7 @@ static extgpu_buffer *register_page(fixture *f, void *memory, uint64_t iova)
 }
 static void ordinary_operations_blocked(fixture *f, extgpu_buffer *buffer)
 {
-    unsigned calls[32]; memcpy(calls, f->fake.calls, sizeof(calls));
+    unsigned calls[52]; memcpy(calls, f->fake.calls, sizeof(calls));
     const unsigned maps = f->fake.maps, unmaps = f->fake.unmaps;
     extgpu_protocol_info protocol;
     extgpu_pci_identity identity;
@@ -753,8 +785,80 @@ static void broker_errors_partial_native_failure_and_local_drop_failures_retain(
     CHECK(f.fake.original_drops == 2 && f.fake.broker_closes == 1 && f.fake.broker_opens == 1);
 }
 
+static void surprise_disconnect_requires_both_removals_and_a_matching_ack(void)
+{
+    fixture f = {.fake = fresh()};
+    f.fake.minor = 30;
+    f.fake.capabilities |= EXTGPU_CAP_SURPRISE_REMOVAL;
+    open_fixture(&f, true);
+    CHECK(extgpu_test_set_reset_scope(f.device, 9002, 9003) == EXTGPU_OK);
+    CHECK(extgpu_surprise_removal_arm(f.device) == EXTGPU_OK);
+    CHECK(f.fake.broker_bound && f.fake.calls[EXTGPU_SELECTOR_COLD_BEGIN] == 0);
+
+    const size_t page = (size_t)getpagesize();
+    void *host = aligned_alloc(page, page);
+    CHECK(host);
+    mach_vm_address_t bar_memory = 0;
+    CHECK(mach_vm_allocate(mach_task_self(), &bar_memory, page,
+          VM_FLAGS_ANYWHERE | VM_MAKE_TAG(VM_MEMORY_IOKIT)) == KERN_SUCCESS);
+    f.fake.bar = (void *)(uintptr_t)bar_memory;
+    extgpu_mapping *bar = NULL;
+    CHECK(extgpu_bar_map(f.device, 0, &bar) == EXTGPU_OK);
+    extgpu_buffer *window = NULL;
+    extgpu_irq *irq = NULL;
+    extgpu_dma_coverage coverage;
+    CHECK(extgpu_dma_register(f.device, 0x10000, host, (size_t)getpagesize(), &window, &coverage) == EXTGPU_OK);
+    f.fake.original_gone = true;
+    CHECK(extgpu_surprise_removal_complete(f.device, &window, &irq, NULL) == EXTGPU_E_UNSAFE);
+    f.fake.fail_bar_unmap = true;
+    CHECK(extgpu_surprise_removal_unmap(&bar) != EXTGPU_OK && bar);
+    extgpu_test_provider_snapshot snapshot = absence();
+    CHECK(extgpu_test_set_provider_snapshot(f.device, &snapshot) == EXTGPU_OK);
+    snapshot.registry_id = 9002;
+    snapshot.entry_count = 1;
+    CHECK(extgpu_test_set_provider_snapshot(f.device, &snapshot) == EXTGPU_OK);
+    CHECK(extgpu_surprise_removal_complete(f.device, &window, &irq, NULL) == EXTGPU_E_UNSAFE);
+    CHECK(window && f.fake.broker_calls[EXTGPU_SELECTOR_RELEASE_SURPRISE_REMOVAL] == 0);
+    CHECK(extgpu_surprise_removal_unmap(&bar) != EXTGPU_OK && bar);
+    snapshot.entry_count = 0;
+    CHECK(extgpu_test_set_provider_snapshot(f.device, &snapshot) == EXTGPU_OK);
+    CHECK(extgpu_surprise_removal_unmap(&bar) == EXTGPU_OK && !bar);
+    CHECK(mach_vm_protect(mach_task_self(), bar_memory, page, false, VM_PROT_READ) ==
+          KERN_PROTECTION_FAILURE);
+    f.fake.native_retire_failure = kIOReturnNotReady;
+    CHECK(extgpu_surprise_removal_complete(f.device, &window, &irq, NULL) != EXTGPU_OK);
+    CHECK(window && f.fake.retire_commits == 0);
+    f.fake.native_retire_failure = 0;
+    f.fake.broker_malformed_selector = EXTGPU_SELECTOR_RELEASE_SURPRISE_REMOVAL;
+    f.fake.broker_bad_field = 0;
+    CHECK(extgpu_surprise_removal_complete(f.device, &window, &irq, NULL) == EXTGPU_E_PROTOCOL);
+    CHECK(window && f.fake.retire_commits == 1);
+    f.fake.broker_malformed_selector = UINT32_MAX;
+    CHECK(extgpu_surprise_removal_complete(f.device, &window, &irq, NULL) == EXTGPU_OK);
+    CHECK(!window && f.fake.retire_commits == 1 && f.fake.finish_commits == 1);
+    close_fixture(&f);
+    CHECK(f.fake.closes == 0 && f.fake.original_drops == 1 && f.fake.broker_closes == 1);
+    CHECK(mach_vm_deallocate(mach_task_self(), bar_memory, page) == KERN_SUCCESS);
+    free(host);
+}
+
+static void surprise_escrow_closes_after_normal_release(void)
+{
+    fixture f = {.fake = fresh()};
+    f.fake.minor = 30;
+    f.fake.capabilities |= EXTGPU_CAP_SURPRISE_REMOVAL;
+    open_fixture(&f, true);
+    CHECK(extgpu_test_set_reset_scope(f.device, 9002, 9003) == EXTGPU_OK);
+    CHECK(extgpu_surprise_removal_arm(f.device) == EXTGPU_OK);
+    CHECK(extgpu_device_release(f.device) == EXTGPU_OK);
+    close_fixture(&f);
+    CHECK(f.fake.closes == 1 && f.fake.original_drops == 0 && f.fake.broker_closes == 1);
+}
+
 int main(void)
 {
+    surprise_disconnect_requires_both_removals_and_a_matching_ack();
+    surprise_escrow_closes_after_normal_release();
     old_minor_compatibility_and_capability_preflight();
     begin_lost_reply_freezes_and_retries_exact_old_key();
     begin_malformed_replies_retain_terminal_session();

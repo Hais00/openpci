@@ -12,6 +12,7 @@
 #include <dispatch/dispatch.h>
 #include <inttypes.h>
 #include <mach/mach.h>
+#include <mach/mach_vm.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -77,6 +78,9 @@ struct extgpu_device {
     extgpu_irq *irq;
     bool shared_irq_attempted;
     bool cold_attempted, cold_acknowledged, cold_confirmed, cold_finished;
+    bool surprise_requested, surprise_detaching, surprise_released, surprise_escrow_closed;
+    bool surprise_draining_irq;
+    uint64_t surprise_bridge;
     uint64_t cold_key[EXTGPU_COLD_KEY_WORDS], cold_enrolled_regions;
     io_connect_t broker_connection;
     uint64_t broker_registry_id, cold_private_cap[EXTGPU_RECOVERY_PRIVATE_CAP_WORDS];
@@ -86,7 +90,7 @@ struct extgpu_device {
     const extgpu_test_transport *test;
     void *test_context;
     bool test_provider_seeded;
-    extgpu_test_provider_snapshot test_provider;
+    extgpu_test_provider_snapshot test_provider, test_bridge_provider;
     uint64_t test_reset_bridge, test_reset_audio;
     const extgpu_test_transport *test_broker;
     const extgpu_test_recovery_hooks *test_recovery;
@@ -172,6 +176,59 @@ static kern_return_t unmap_memory(extgpu_device *d, uint32_t type, uint64_t addr
 #endif
     return IOConnectUnmapMemory64(d->connection, type, mach_task_self(), address);
 }
+static extgpu_status confirm_registry_absent(extgpu_device *d, uint64_t id);
+
+static kern_return_t task_region(mach_vm_address_t *address, mach_vm_size_t *size,
+                                 struct vm_region_submap_info_64 *info)
+{
+    natural_t depth = 0;
+    for (;;) {
+        mach_msg_type_number_t count = VM_REGION_SUBMAP_INFO_COUNT_64;
+        const kern_return_t kr = mach_vm_region_recurse(mach_task_self(), address, size,
+            &depth, (vm_region_recurse_info_t)info, &count);
+        if (kr != KERN_SUCCESS || !info->is_submap) return kr;
+        ++depth;
+    }
+}
+
+/* The old PCI endpoint can be gone while XNU still reserves the same task
+ * address for its IOMemoryMap. Replace that exact IOKit range with an
+ * anonymous guard in one Mach VM operation. Keep the guard in place so a
+ * later IOMemoryMap destructor cannot unmap an unrelated address reuse. */
+static kern_return_t unmap_detached_memory(extgpu_device *d, uint32_t type, uint64_t base, uint64_t bytes)
+{
+    const kern_return_t native = unmap_memory(d, type, base);
+    if (native == KERN_SUCCESS || !base || !bytes || bytes > UINT64_MAX - base) return native;
+
+    mach_vm_address_t address = base;
+    mach_vm_size_t size = 0;
+    struct vm_region_submap_info_64 info = {0};
+    kern_return_t kr = task_region(&address, &size, &info);
+    if (kr == KERN_INVALID_ADDRESS || (kr == KERN_SUCCESS && address >= base + bytes))
+        return KERN_SUCCESS;
+    if (kr != KERN_SUCCESS || address != base || size != bytes) return native;
+
+    const unsigned guard_tag = VM_MEMORY_APPLICATION_SPECIFIC_16;
+    if (info.user_tag == guard_tag && info.protection == VM_PROT_NONE &&
+        info.max_protection == VM_PROT_NONE) return KERN_SUCCESS;
+    const bool bar = type >= EXTGPU_MEMORY_BAR0 && type <= EXTGPU_MEMORY_BAR5;
+    if (info.user_tag != VM_MEMORY_IOKIT || (bar && info.share_mode != SM_EMPTY) ||
+        base % vm_page_size || bytes % vm_page_size || !d->surprise_bridge ||
+        confirm_registry_absent(d, d->pci_registry_id) != EXTGPU_OK ||
+        confirm_registry_absent(d, d->surprise_bridge) != EXTGPU_OK) return native;
+
+    kr = mach_vm_map(mach_task_self(), &address, bytes, 0,
+        VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE | VM_MAKE_TAG(guard_tag),
+        MEMORY_OBJECT_NULL, 0, false, VM_PROT_NONE, VM_PROT_NONE, VM_INHERIT_NONE);
+    if (kr != KERN_SUCCESS) return kr;
+    address = base;
+    kr = task_region(&address, &size, &info);
+    if (kr != KERN_SUCCESS) return kr;
+    return address == base && size == bytes && info.user_tag == guard_tag &&
+        info.protection == VM_PROT_NONE && info.max_protection == VM_PROT_NONE ?
+        KERN_SUCCESS : KERN_PROTECTION_FAILURE;
+}
+
 static kern_return_t close_connection(extgpu_device *d)
 {
 #ifdef EXTGPU_TESTING
@@ -224,6 +281,7 @@ static extgpu_status broker_rpc(extgpu_device *d, uint32_t selector, const uint6
 static extgpu_status query(extgpu_device *d)
 {
     if (d->original_closed) return error(d, EXTGPU_E_UNSAFE, 0, "connection.closed");
+    if (d->surprise_detaching) return error(d, EXTGPU_E_UNSAFE, 0, "Surprise.operation_denied");
     if (d->cold_attempted) return error(d, EXTGPU_E_UNSAFE, 0, "Cold.ordinary_query_denied");
     if (d->warm_vm_pending) return error(d, EXTGPU_E_UNSAFE, 0, "WarmVM.query_denied");
     d->protocol_valid = false;
@@ -238,6 +296,8 @@ static extgpu_status query(extgpu_device *d)
         (out[3] & EXTGPU_STATE_QUARANTINED) || out[4] > EXTGPU_MAX_DMA_REGIONS ||
         (configurable_dma ? (out[1] < EXTGPU_DMA_BUDGET_MINIMUM_MINOR || !out[5]) :
                             out[5] > EXTGPU_MAX_PREPARED_DMA_BYTES) ||
+        ((out[3] & EXTGPU_CAP_SURPRISE_REMOVAL) &&
+         (out[1] < 30 || !(out[3] & EXTGPU_CAP_RECOVERY_BROKER))) ||
         ((out[3] & EXTGPU_CAP_VM_DMA_SEGMENTS) && out[1] < EXTGPU_VM_DMA_MINIMUM_MINOR) ||
         ((out[3] & EXTGPU_CAP_VM_DYNAMIC_DMA) && out[1] < EXTGPU_VM_DYNAMIC_DMA_MINIMUM_MINOR) ||
         ((out[3] & EXTGPU_CAP_MMIO_WINDOW_WORD_WRITES) &&
@@ -270,6 +330,7 @@ static extgpu_status query(extgpu_device *d)
 static extgpu_status ready(extgpu_device *d, uint64_t capability, bool claim)
 {
     if (d->original_closed) return error(d, EXTGPU_E_UNSAFE, 0, "connection.closed");
+    if (d->surprise_detaching) return error(d, EXTGPU_E_UNSAFE, 0, "Surprise.operation_denied");
     if (d->cold_attempted) return error(d, EXTGPU_E_UNSAFE, 0, "Cold.ordinary_operation_denied");
     if (d->warm_vm_pending) return error(d, EXTGPU_E_UNSAFE, 0, "WarmVM.operation_denied");
     if (!d->protocol_valid) return error(d, EXTGPU_E_STALE, 0, "protocol.invalid");
@@ -501,7 +562,8 @@ extgpu_status extgpu_device_claim(extgpu_device *d)
 {
     if (!d) return EXTGPU_E_ARGUMENT;
     pthread_mutex_lock(&d->lock);
-    extgpu_status st = d->cold_attempted ? error(d, EXTGPU_E_UNSAFE, 0, "Cold.claim_denied") :
+    extgpu_status st = d->surprise_requested ? error(d, EXTGPU_E_BUSY, 0, "Surprise.close_before_reclaim") :
+        d->cold_attempted ? error(d, EXTGPU_E_UNSAFE, 0, "Cold.claim_denied") :
         (d->claimed ? (d->ownership_uncertain ? EXTGPU_E_UNSAFE : EXTGPU_E_BUSY) : query(d));
     if (st == EXTGPU_OK) st = ready(d, EXTGPU_CAP_EXCLUSIVE_CLAIM, false);
     if (st == EXTGPU_OK) {
@@ -556,6 +618,8 @@ extgpu_status extgpu_device_set_dma_address_bits(extgpu_device *d, uint32_t bits
     if (st == EXTGPU_OK) d->dma_address_bits = bits;
     pthread_mutex_unlock(&d->lock); return st;
 }
+static extgpu_status surprise_close_escrow(extgpu_device *d, const uint64_t proof[8]);
+
 extgpu_status extgpu_device_close(extgpu_device **ptr)
 {
     if (!ptr || !*ptr) return EXTGPU_E_ARGUMENT;
@@ -563,13 +627,17 @@ extgpu_status extgpu_device_close(extgpu_device **ptr)
     pthread_mutex_lock(&d->lock);
     if (d->cold_attempted && !d->cold_finished) { pthread_mutex_unlock(&d->lock); return EXTGPU_E_UNSAFE; }
     if (d->claimed || resources(d)) { pthread_mutex_unlock(&d->lock); return EXTGPU_E_BUSY; }
+    if (d->surprise_requested && !d->surprise_escrow_closed) {
+        const extgpu_status st = surprise_close_escrow(d, NULL);
+        if (st != EXTGPU_OK) { pthread_mutex_unlock(&d->lock); return st; }
+    }
     if (d->mmio_ring) {
         if (d->mmio_grouped_requests)
             fprintf(stderr, "OPENPCI_MMIO_GROUPED requests=%" PRIu64 " writes=%" PRIu64 "\n",
                     d->mmio_grouped_requests, d->mmio_grouped_writes);
         if (d->mmio_ring_flags & OPENPCI_MMIO_RING_EVENT_FLAG)
             fputs("OPENPCI_MMIO_RING_EVENT enabled=1\n", stderr);
-        if (d->mmio_ring_flags & OPENPCI_MMIO_RING_IRQ_ARM_FLAG)
+        if (!d->surprise_released && (d->mmio_ring_flags & OPENPCI_MMIO_RING_IRQ_ARM_FLAG))
             fprintf(stderr, "OPENPCI_MMIO_RING_IRQ arms=%" PRIu64 " hits=%" PRIu64
                     " extensions=%" PRIu64 "\n",
                     __atomic_load_n(&d->mmio_ring->irqArms, __ATOMIC_RELAXED),
@@ -612,7 +680,7 @@ extgpu_status extgpu_device_close(extgpu_device **ptr)
                 d->mmio_window_word_writes, d->mmio_window_word_replies, d->mmio_window_word_fallbacks);
     }
     kern_return_t kr = KERN_SUCCESS;
-    if (d->cold_finished) {
+    if (d->cold_finished || d->surprise_released) {
         if (!d->broker_bound) { pthread_mutex_unlock(&d->lock); return EXTGPU_E_UNSAFE; }
         if (!d->original_local_dropped) {
             kr = drop_original_local(d);
@@ -635,7 +703,7 @@ extgpu_status extgpu_device_close(extgpu_device **ptr)
             pthread_mutex_unlock(&d->lock); return st;
         }
     }
-    if (!d->cold_finished && !d->original_closed) {
+    if (!d->cold_finished && !d->surprise_released && !d->original_closed) {
         kr = close_connection(d);
         /* IOServiceClose deallocates the connect reference even when its RPC
          * fails. Retain only this SDK object for local cleanup retry; the old
@@ -658,6 +726,8 @@ extgpu_status extgpu_device_reset(extgpu_device *d)
     if (!d) return EXTGPU_E_ARGUMENT;
     pthread_mutex_lock(&d->lock);
     extgpu_status st = ready(d, EXTGPU_CAP_RESET, true);
+    if (st == EXTGPU_OK && d->surprise_requested)
+        st = error(d, EXTGPU_E_BUSY, 0, "Surprise.reset_requires_new_session");
     if (st == EXTGPU_OK && resources(d)) st = error(d, EXTGPU_E_BUSY, 0, "Reset.live_resources");
     uint64_t previous = d->protocol.generation;
     if (st == EXTGPU_OK) {
@@ -790,6 +860,7 @@ extgpu_status extgpu_cold_removal_begin(extgpu_device *d, extgpu_cold_removal_in
 {
     if (!d || !out) return EXTGPU_E_ARGUMENT;
     pthread_mutex_lock(&d->lock);
+    if (d->surprise_requested) { pthread_mutex_unlock(&d->lock); return EXTGPU_E_BUSY; }
     extgpu_status st = EXTGPU_OK;
     bool first_attempt = false;
     if (d->cold_finished) st = error(d, EXTGPU_E_UNSAFE, 0, "Cold.begin_after_finish");
@@ -850,30 +921,31 @@ extgpu_status extgpu_cold_removal_begin(extgpu_device *d, extgpu_cold_removal_in
     return st;
 }
 
-static bool cold_provider_absence_valid(extgpu_device *d, uint64_t id, kern_return_t native,
+static bool registry_absence_valid(uint64_t expected, uint64_t id, kern_return_t native,
                                        bool dictionary, bool iterator, bool valid_before,
                                        bool valid_after, uint64_t entries)
 {
     /* IOKitLib.h explicitly permits SUCCESS + NULL for an empty match. A
      * non-NULL iterator still needs valid observations before and after Next.
      * NULL has no validity observations; contradictory flags are not proof. */
-    return id == d->cold_key[2] && native == KERN_SUCCESS && dictionary && entries == 0 &&
+    return id == expected && native == KERN_SUCCESS && dictionary && entries == 0 &&
         (iterator ? valid_before && valid_after : !valid_before && !valid_after);
 }
-static extgpu_status cold_confirm_provider(extgpu_device *d)
+static extgpu_status confirm_registry_absent(extgpu_device *d, uint64_t id)
 {
 #ifdef EXTGPU_TESTING
     if (d->test) {
-        if (!d->test_provider_seeded) return error(d, EXTGPU_E_UNSAFE, 0, "Cold.test_provider_unseeded");
-        const extgpu_test_provider_snapshot *s = &d->test_provider;
-        if (!cold_provider_absence_valid(d, s->registry_id, s->native_status,
+        const bool bridge = id == d->surprise_bridge;
+        if (!bridge && !d->test_provider_seeded)
+            return error(d, EXTGPU_E_UNSAFE, 0, "Recovery.test_provider_unseeded");
+        const extgpu_test_provider_snapshot *s = bridge ? &d->test_bridge_provider : &d->test_provider;
+        if (!registry_absence_valid(id, s->registry_id, s->native_status,
             s->dictionary_created == 1, s->iterator_present == 1,
             s->iterator_valid_before == 1, s->iterator_valid_after == 1, s->entry_count))
             return error(d, EXTGPU_E_UNSAFE, s->native_status, "Cold.provider_not_proven_absent");
         return EXTGPU_OK;
     }
 #endif
-    const uint64_t id = d->cold_key[2];
     CFMutableDictionaryRef match = IORegistryEntryIDMatching(id);
     if (!match) return error(d, EXTGPU_E_UNSAFE, 0, "Cold.provider_dictionary_failed");
     io_iterator_t iterator = IO_OBJECT_NULL;
@@ -887,7 +959,7 @@ static extgpu_status cold_confirm_provider(extgpu_device *d)
         valid_after = IOIteratorIsValid(iterator);
     }
     if (iterator) IOObjectRelease(iterator);
-    if (!cold_provider_absence_valid(d, id, kr, true, iterator != IO_OBJECT_NULL,
+    if (!registry_absence_valid(id, id, kr, true, iterator != IO_OBJECT_NULL,
                                      valid_before, valid_after, entries))
         return error(d, EXTGPU_E_UNSAFE, kr, "Cold.provider_not_proven_absent");
     return EXTGPU_OK;
@@ -899,7 +971,7 @@ extgpu_status extgpu_cold_removal_confirm(extgpu_device *d, uint32_t flags)
     extgpu_status st = EXTGPU_OK;
     if (!d->cold_acknowledged || d->cold_finished)
         st = error(d, EXTGPU_E_UNSAFE, 0, "Cold.confirm_requires_frozen_ACK");
-    if (st == EXTGPU_OK && !d->cold_confirmed) st = cold_confirm_provider(d);
+    if (st == EXTGPU_OK && !d->cold_confirmed) st = confirm_registry_absent(d, d->cold_key[2]);
     if (st == EXTGPU_OK) d->cold_confirmed = true;
     pthread_mutex_unlock(&d->lock);
     return st;
@@ -970,6 +1042,95 @@ extgpu_status extgpu_bar_get_info(extgpu_device *d, uint32_t bar, extgpu_bar_inf
     if (!d || bar >= 6 || !out) return EXTGPU_E_ARGUMENT;
     pthread_mutex_lock(&d->lock); extgpu_status st = bar_info(d, bar, out); pthread_mutex_unlock(&d->lock); return st;
 }
+static uint64_t surprise_tunnel_bridge(extgpu_device *d)
+{
+#ifdef EXTGPU_TESTING
+    if (d->test) return d->test_reset_bridge;
+#endif
+    CFMutableDictionaryRef match = IORegistryEntryIDMatching(d->pci_registry_id);
+    if (!match) return 0;
+    io_service_t pci = IOServiceGetMatchingService(kIOMainPortDefault, match);
+    if (!pci) return 0;
+    uint64_t bridge = 0;
+    io_registry_entry_t parent = IO_OBJECT_NULL;
+    CFTypeRef tunneled = IORegistryEntryCreateCFProperty(pci, CFSTR("IOPCITunnelled"), kCFAllocatorDefault, 0);
+    if (tunneled == kCFBooleanTrue &&
+        IORegistryEntryGetParentEntry(pci, kIOServicePlane, &parent) == KERN_SUCCESS &&
+        IOObjectConformsTo(parent, "IOPCI2PCIBridge")) {
+        if (IORegistryEntryGetRegistryEntryID(parent, &bridge) != KERN_SUCCESS ||
+            bridge == d->pci_registry_id || bridge == d->registry_id) bridge = 0;
+    }
+    if (parent) IOObjectRelease(parent);
+    if (tunneled) CFRelease(tunneled);
+    IOObjectRelease(pci);
+    return bridge;
+}
+
+extgpu_status extgpu_surprise_removal_arm(extgpu_device *d)
+{
+    if (!d) return EXTGPU_E_ARGUMENT;
+    pthread_mutex_lock(&d->lock);
+    extgpu_status st = ready(d, EXTGPU_CAP_SURPRISE_REMOVAL | EXTGPU_CAP_RECOVERY_BROKER, true);
+    if (st == EXTGPU_OK && (resources(d) || d->direct_bar_retired))
+        st = error(d, EXTGPU_E_BUSY, 0, "Surprise.live_resources");
+    if (st == EXTGPU_OK && !d->surprise_requested) {
+        d->surprise_bridge = surprise_tunnel_bridge(d);
+        if (!d->surprise_bridge)
+            st = error(d, EXTGPU_E_UNSUPPORTED, 0, "Surprise.tunnel_scope");
+        if (st == EXTGPU_OK) st = cold_broker_preflight(d);
+        if (st == EXTGPU_OK) {
+            d->cold_key[0] = d->protocol.generation;
+            d->cold_key[1] = d->registry_id;
+            d->cold_key[2] = d->pci_registry_id;
+            arc4random_buf(d->cold_key + 3, 2 * sizeof(uint64_t));
+            if (!(d->cold_key[3] | d->cold_key[4])) d->cold_key[4] = 1;
+            do { arc4random_buf(d->cold_private_cap, sizeof(d->cold_private_cap)); }
+            while (!(d->cold_private_cap[0] | d->cold_private_cap[1]) ||
+                   !memcmp(d->cold_private_cap, d->cold_key + 3, sizeof(d->cold_private_cap)));
+            d->surprise_requested = true;
+        }
+    }
+    if (st == EXTGPU_OK && !d->broker_bound) {
+        uint64_t in[EXTGPU_RECOVERY_ESCROW_INPUT_COUNT], out[EXTGPU_RECOVERY_PREPARE_OUTPUT_COUNT] = {0};
+        cold_escrow_input(d, in);
+        st = rpc(d, EXTGPU_SELECTOR_ARM_SURPRISE_REMOVAL, in, EXTGPU_RECOVERY_ESCROW_INPUT_COUNT,
+                 out, EXTGPU_RECOVERY_PREPARE_OUTPUT_COUNT, "Surprise.arm");
+        if (st == EXTGPU_OK && (!cold_key_matches(d, out) || out[5] != d->broker_registry_id))
+            st = error(d, EXTGPU_E_PROTOCOL, 0, "Surprise.arm_reply");
+        const extgpu_status bound = cold_bind(d);
+        if (bound == EXTGPU_OK) st = EXTGPU_OK;
+        else if (st == EXTGPU_OK) st = bound;
+        /* A lost arm reply can be recovered by bind on the same connection.
+         * Do not start a hardware session unless the VMM gets that ACK. */
+    }
+    pthread_mutex_unlock(&d->lock);
+    return st;
+}
+
+static extgpu_status surprise_close_escrow(extgpu_device *d, const uint64_t proof[8])
+{
+    if (!d->broker_bound) {
+        const extgpu_status st = cold_bind(d);
+        if (st != EXTGPU_OK) {
+            if (!d->surprise_detaching && d->error.native_code == kIOReturnNotFound) {
+                d->surprise_escrow_closed = true;
+                return EXTGPU_OK;
+            }
+            return st;
+        }
+    }
+    uint64_t in[EXTGPU_SURPRISE_RELEASE_INPUT_COUNT] = {0}, out[EXTGPU_SURPRISE_RELEASE_OUTPUT_COUNT] = {0};
+    memcpy(in, d->cold_key, sizeof(d->cold_key));
+    in[5] = d->surprise_detaching;
+    if (proof) memcpy(in + 6, proof, 8 * sizeof(uint64_t));
+    extgpu_status st = broker_rpc(d, EXTGPU_SELECTOR_RELEASE_SURPRISE_REMOVAL, in,
+        EXTGPU_SURPRISE_RELEASE_INPUT_COUNT, out, EXTGPU_SURPRISE_RELEASE_OUTPUT_COUNT, "Surprise.release");
+    if (st == EXTGPU_OK && memcmp(in, out, sizeof(out)))
+        st = error(d, EXTGPU_E_PROTOCOL, 0, "Surprise.release_reply");
+    if (st == EXTGPU_OK) d->surprise_escrow_closed = true;
+    return st;
+}
+
 extgpu_status extgpu_direct_bar_challenge(extgpu_device *d, uint64_t out_challenge[3])
 {
     if (!d || !out_challenge) return EXTGPU_E_ARGUMENT;
@@ -1092,6 +1253,24 @@ extgpu_status extgpu_mapping_unmap(extgpu_mapping **ptr)
     if (st == EXTGPU_OK) { free(m); *ptr = NULL; }
     return st;
 }
+extgpu_status extgpu_surprise_removal_unmap(extgpu_mapping **ptr)
+{
+    if (!ptr || !*ptr) return EXTGPU_E_ARGUMENT;
+    extgpu_mapping *m = *ptr;
+    extgpu_device *d = m->device;
+    pthread_mutex_lock(&d->lock);
+    extgpu_status st = EXTGPU_E_UNSAFE;
+    if (d->surprise_requested && d->broker_bound && m->generation == d->cold_key[0]) {
+        d->surprise_detaching = true;
+        const kern_return_t kr = unmap_detached_memory(d, EXTGPU_MEMORY_BAR0 + m->bar, m->address, m->size);
+        st = error(d, native_status(kr), kr, "Surprise.unmap_bar");
+        if (st == EXTGPU_OK) d->bar_mask &= ~(1u << m->bar);
+    }
+    pthread_mutex_unlock(&d->lock);
+    if (st == EXTGPU_OK) { free(m); *ptr = NULL; }
+    return st;
+}
+
 static void kick_mmio_window(io_connect_t connection, struct openpci_mmio_window *window,
                              uint64_t generation, uint64_t posted)
 {
@@ -1485,11 +1664,15 @@ extgpu_status extgpu_bar_words(extgpu_device *d, uint32_t index, uint64_t off,
     return st;
 }
 
-static bool complete_coverage(extgpu_device *d, uint64_t count, uint64_t bus, uint64_t length, uint64_t requested)
+static bool coverage_fits(uint32_t bits, uint64_t count, uint64_t bus, uint64_t length, uint64_t requested)
 {
     if (count != 1 || length != requested || !requested || add_overflow(bus, requested - 1)) return false;
-    uint64_t limit = d->dma_address_bits == 64 ? UINT64_MAX : (UINT64_C(1) << d->dma_address_bits) - 1;
+    const uint64_t limit = bits == 64 ? UINT64_MAX : (UINT64_C(1) << bits) - 1;
     return bus <= limit && requested - 1 <= limit - bus;
+}
+static bool complete_coverage(extgpu_device *d, uint64_t count, uint64_t bus, uint64_t length, uint64_t requested)
+{
+    return coverage_fits(d->dma_address_bits, count, bus, length, requested);
 }
 static void release_buffer_accounting(extgpu_buffer *b)
 {
@@ -1594,7 +1777,7 @@ extgpu_status extgpu_device_set_dma_budget(extgpu_device *d, uint64_t bytes)
     return st;
 }
 static extgpu_status read_vm_dma_segments(extgpu_device *d, extgpu_buffer *buffer,
-                                          const uint64_t summary[3], uint64_t page)
+                                          const uint64_t summary[3], uint64_t page, uint32_t address_bits)
 {
     const uint64_t size = buffer->coverage.requested_bytes;
     if (!summary[0] || summary[0] > EXTGPU_VM_DMA_SEGMENT_LIMIT || summary[2] != size)
@@ -1607,7 +1790,7 @@ static extgpu_status read_vm_dma_segments(extgpu_device *d, extgpu_buffer *buffe
         if (st != EXTGPU_OK) return st;
         const uint64_t bus = reply[0], bytes = reply[1];
         if ((!i && bus != summary[1]) || bytes > size - offset || bus % page || bytes % page ||
-            add_overflow(bus, bytes) || !complete_coverage(d, 1, bus, bytes, bytes))
+            add_overflow(bus, bytes) || !coverage_fits(address_bits, 1, bus, bytes, bytes))
             return error(d, EXTGPU_E_COVERAGE, 0, "VM_DMA.segment");
         for (uint64_t j = 0; j < i; ++j) {
             const extgpu_vm_dma_segment *other = &buffer->vm_segments[j];
@@ -1622,7 +1805,8 @@ static extgpu_status read_vm_dma_segments(extgpu_device *d, extgpu_buffer *buffe
 
 static extgpu_status register_dma(extgpu_device *d, uint64_t iova, void *host, uint64_t size,
                                  extgpu_buffer **out, extgpu_dma_coverage *coverage,
-                                 bool vm_window, bool segmented, bool dynamic)
+                                 bool vm_window, bool segmented, bool dynamic,
+                                 uint32_t address_bits, extgpu_vm_dma_segment *segments)
 {
     if (!d || !out || !coverage || !host || !size || size > SIZE_MAX || add_overflow(iova, size) || add_overflow((uintptr_t)host, size)) return EXTGPU_E_ARGUMENT;
     *out = NULL; memset(coverage, 0, sizeof(*coverage));
@@ -1632,6 +1816,7 @@ static extgpu_status register_dma(extgpu_device *d, uint64_t iova, void *host, u
     extgpu_buffer *b = calloc(1, sizeof(*b) + table_bytes); if (!b) return EXTGPU_E_MEMORY;
     pthread_mutex_lock(&d->lock);
     extgpu_status st = ready(d, EXTGPU_CAP_DMA_REGISTER | (segmented ? EXTGPU_CAP_VM_DMA_SEGMENTS : 0), true);
+    if (st == EXTGPU_OK && address_bits) st = ready(d, EXTGPU_CAP_VM_DMA_CONSTRAINED, true);
     if (st == EXTGPU_OK && dynamic != (d->vm_dynamic_window != NULL))
         st = error(d, EXTGPU_E_UNSUPPORTED, 0, "VM_DMA.registration_mode");
     if (st == EXTGPU_OK && vm_window && resources(d))
@@ -1644,19 +1829,25 @@ static extgpu_status register_dma(extgpu_device *d, uint64_t iova, void *host, u
         b->vm_dynamic = dynamic;
         b->coverage = (extgpu_dma_coverage){.generation=d->protocol.generation, .requested_iova=iova, .requested_bytes=size};
         reserve_buffer(d, b, size);
-        uint64_t in[3] = {iova, (uintptr_t)host, size}, values[3] = {0};
-        const uint32_t selector = dynamic ? EXTGPU_SELECTOR_REGISTER_VM_DYNAMIC_DMA :
+        const uint64_t in[] = {iova, (uintptr_t)host, size, address_bits, segmented};
+        uint64_t values[3] = {0};
+        const uint32_t selector = address_bits ? EXTGPU_SELECTOR_REGISTER_VM_DMA_CONSTRAINED :
+            dynamic ? EXTGPU_SELECTOR_REGISTER_VM_DYNAMIC_DMA :
             segmented ? EXTGPU_SELECTOR_REGISTER_VM_DMA : EXTGPU_SELECTOR_REGISTER_DMA_REGION;
-        st = rpc(d, selector, in, 3, values, 3, "RegisterDMA");
+        st = rpc(d, selector, in, address_bits ? 5 : 3, values, 3, "RegisterDMA");
         const bool duplicate = st != EXTGPU_OK && d->error.native_code == kIOReturnStillOpen;
         const bool preflight_failure = dynamic && st != EXTGPU_OK &&
             (d->error.native_code == kIOReturnNoSpace || d->error.native_code == kIOReturnNoMemory ||
              d->error.native_code == kIOReturnNotAligned);
-        if (st == EXTGPU_OK && segmented) st = read_vm_dma_segments(d, b, values, (uint64_t)page);
-        bool valid = st == EXTGPU_OK && (segmented || complete_coverage(d, values[0], values[1], values[2], size));
+        const uint32_t effective_bits = address_bits ? address_bits : d->dma_address_bits;
+        if (st == EXTGPU_OK && segmented)
+            st = read_vm_dma_segments(d, b, values, (uint64_t)page, effective_bits);
+        const bool valid = st == EXTGPU_OK &&
+            (segmented || coverage_fits(effective_bits, values[0], values[1], values[2], size));
         if (valid) {
             b->coverage.bus_address=values[1]; b->coverage.covered_bytes=values[2];
             b->coverage.segment_count=(uint32_t)values[0]; b->coverage.complete=1;
+            if (segments) memcpy(segments, b->vm_segments, b->coverage.segment_count * sizeof(*segments));
             *out=b; *coverage=b->coverage;
         } else if (duplicate) {
             release_buffer_accounting(b);
@@ -1684,17 +1875,17 @@ static extgpu_status register_dma(extgpu_device *d, uint64_t iova, void *host, u
 extgpu_status extgpu_dma_register(extgpu_device *d, uint64_t iova, void *host, uint64_t size,
                                  extgpu_buffer **out, extgpu_dma_coverage *coverage)
 {
-    return register_dma(d, iova, host, size, out, coverage, false, false, false);
+    return register_dma(d, iova, host, size, out, coverage, false, false, false, 0, NULL);
 }
 extgpu_status extgpu_vm_ram_register(extgpu_device *d, uint64_t iova, void *host, uint64_t size,
                                     extgpu_buffer **out, extgpu_dma_coverage *coverage)
 {
-    return register_dma(d, iova, host, size, out, coverage, true, false, false);
+    return register_dma(d, iova, host, size, out, coverage, true, false, false, 0, NULL);
 }
 extgpu_status extgpu_vm_ram_register_segmented(extgpu_device *d, uint64_t iova, void *host, uint64_t size,
                                     extgpu_buffer **out, extgpu_dma_coverage *coverage)
 {
-    return register_dma(d, iova, host, size, out, coverage, true, true, false);
+    return register_dma(d, iova, host, size, out, coverage, true, true, false, 0, NULL);
 }
 
 extgpu_status extgpu_vm_dma_enable(extgpu_device *d, const extgpu_buffer *window)
@@ -1722,7 +1913,17 @@ extgpu_status extgpu_vm_dma_map(extgpu_device *d, uint64_t key, void *host, uint
                                 extgpu_dma_coverage *coverage)
 {
     extgpu_buffer *internal = NULL;
-    return register_dma(d, key, host, size, &internal, coverage, false, false, true);
+    return register_dma(d, key, host, size, &internal, coverage, false, false, true, 0, NULL);
+}
+
+extgpu_status extgpu_vm_dma_map_constrained(extgpu_device *d, uint64_t key, void *host,
+                                uint64_t size, uint32_t bits, extgpu_vm_dma_segment *segments,
+                                extgpu_dma_coverage *coverage)
+{
+    if (bits < 32 || bits > 64) return EXTGPU_E_ARGUMENT;
+    extgpu_buffer *internal = NULL;
+    return register_dma(d, key, host, size, &internal, coverage, false, segments != NULL, true,
+                        bits, segments);
 }
 
 extgpu_status extgpu_vm_dma_unmap(extgpu_device *d, uint64_t key)
@@ -1770,6 +1971,8 @@ extgpu_status extgpu_dma_allocate(extgpu_device *d, uint64_t size, uint64_t alig
     extgpu_buffer *b=calloc(1,sizeof(*b)); if (!b) return EXTGPU_E_MEMORY;
     pthread_mutex_lock(&d->lock);
     extgpu_status st=ready(d,EXTGPU_CAP_DMA_ALLOCATE,true);
+    if (st == EXTGPU_OK && d->surprise_requested)
+        st = error(d, EXTGPU_E_UNSUPPORTED, 0, "Surprise.allocated_buffer");
     if (st==EXTGPU_OK && d->vm_dynamic_window) st=error(d,EXTGPU_E_UNSUPPORTED,0,"VM_DMA.registration_mode");
     if (st==EXTGPU_OK) st=dma_capacity(d,size);
     if (st==EXTGPU_OK && d->allocated_buffer) st=EXTGPU_E_BUSY;
@@ -2535,6 +2738,68 @@ extgpu_status extgpu_irq_close(extgpu_irq **ptr)
     return EXTGPU_OK;
 }
 
+extgpu_status extgpu_surprise_removal_complete(extgpu_device *d, extgpu_buffer **window,
+                                               extgpu_irq **irq_ptr, const uint64_t bar_proof[8])
+{
+    if (!d || !window || !irq_ptr || dispatch_get_specific(&irq_queue_key)) return EXTGPU_E_ARGUMENT;
+    pthread_mutex_lock(&d->lock);
+    if (d->surprise_released) { pthread_mutex_unlock(&d->lock); return EXTGPU_OK; }
+    extgpu_irq *irq = *irq_ptr;
+    const bool valid_window = d->vm_dynamic_window ? *window == d->vm_dynamic_window :
+        *window == d->buffer_list && d->buffers == (*window ? 1u : 0u);
+    if (!d->surprise_requested || !d->broker_bound || d->bar_mask || d->allocated_buffer ||
+        d->surprise_draining_irq || irq != d->irq || !valid_window ||
+        (d->direct_bar_authorized && !bar_proof)) {
+        pthread_mutex_unlock(&d->lock);
+        return EXTGPU_E_UNSAFE;
+    }
+    d->surprise_detaching = true;
+    extgpu_status st = confirm_registry_absent(d, d->pci_registry_id);
+    if (st == EXTGPU_OK) st = confirm_registry_absent(d, d->surprise_bridge);
+    if (st == EXTGPU_OK && irq) {
+        pthread_mutex_lock(&irq->lock);
+        irq->stopping = true;
+        pthread_mutex_unlock(&irq->lock);
+        if (irq->mailbox_address) {
+            const kern_return_t kr = unmap_detached_memory(d, EXTGPU_MEMORY_IRQ_MAILBOX,
+                irq->mailbox_address, OPENPCI_IRQ_MAILBOX_BYTES);
+            if (kr == KERN_SUCCESS) {
+                irq->mailbox_address = 0;
+                irq->mailbox = NULL;
+            } else st = error(d, native_status(kr), kr, "Surprise.unmap_irq");
+        }
+    }
+    if (st == EXTGPU_OK) st = surprise_close_escrow(d, bar_proof);
+    if (st != EXTGPU_OK) { pthread_mutex_unlock(&d->lock); return st; }
+    if (irq) {
+        /* The source's last callback can call back into the SDK. */
+        d->surprise_draining_irq = true;
+        pthread_mutex_unlock(&d->lock);
+        dispatch_source_cancel(irq->source);
+        dispatch_semaphore_wait(irq->cancelled, DISPATCH_TIME_FOREVER);
+        pthread_mutex_lock(&d->lock);
+        dispatch_release(irq->source);
+        dispatch_release(irq->queue);
+        dispatch_release(irq->cancelled);
+        pthread_mutex_destroy(&irq->lock);
+        free(irq);
+        d->irq = *irq_ptr = NULL;
+        d->surprise_draining_irq = false;
+    }
+    while (d->buffer_list) {
+        extgpu_buffer *retired = d->buffer_list;
+        release_buffer_accounting(retired);
+        free(retired);
+    }
+    d->vm_dynamic_window = *window = NULL;
+    d->claimed = false;
+    d->protocol_valid = false;
+    d->warm_vm_pending = false;
+    d->surprise_released = true;
+    pthread_mutex_unlock(&d->lock);
+    return EXTGPU_OK;
+}
+
 #ifdef EXTGPU_TESTING
 extgpu_status extgpu_test_set_recovery_transport(extgpu_device *d, const extgpu_test_transport *transport,
     const extgpu_test_recovery_hooks *hooks, void *context)
@@ -2573,7 +2838,14 @@ extgpu_status extgpu_test_set_provider_snapshot(extgpu_device *d, const extgpu_t
     if (!d || !snapshot) return EXTGPU_E_ARGUMENT;
     pthread_mutex_lock(&d->lock);
     extgpu_status st = d->test ? EXTGPU_OK : EXTGPU_E_ARGUMENT;
-    if (st == EXTGPU_OK) { d->test_provider = *snapshot; d->test_provider_seeded = true; }
+    if (st == EXTGPU_OK) {
+        if (d->test_reset_bridge && snapshot->registry_id == d->test_reset_bridge)
+            d->test_bridge_provider = *snapshot;
+        else {
+            d->test_provider = *snapshot;
+            d->test_provider_seeded = true;
+        }
+    }
     pthread_mutex_unlock(&d->lock);
     return st;
 }

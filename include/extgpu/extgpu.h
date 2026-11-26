@@ -74,7 +74,9 @@ typedef uint64_t extgpu_capabilities;
 #define EXTGPU_CAP_WARM_VM_NO_DMA_RELEASE (UINT64_C(1)<<25)
 #define EXTGPU_CAP_CONFIGURABLE_DMA_BUDGET (UINT64_C(1)<<30)
 #define EXTGPU_CAP_VM_DMA_SEGMENTS (UINT64_C(1)<<31)
+#define EXTGPU_CAP_VM_DMA_CONSTRAINED (UINT64_C(1)<<42)
 #define EXTGPU_CAP_VM_DYNAMIC_DMA (UINT64_C(1)<<32)
+#define EXTGPU_CAP_SURPRISE_REMOVAL (UINT64_C(1)<<41)
 #define EXTGPU_CAP_DMA_ADDRESS_BITS EXTGPU_CAP_CONFIGURABLE_DMA_MASK
 
 /* All public structure layouts and function signatures in ABI 1 are frozen.
@@ -259,6 +261,17 @@ EXTGPU_API void *extgpu_mapping_address(const extgpu_mapping *mapping);
 EXTGPU_API uint64_t extgpu_mapping_size(const extgpu_mapping *mapping);
 EXTGPU_API uint64_t extgpu_mapping_generation(const extgpu_mapping *mapping);
 EXTGPU_API extgpu_status extgpu_mapping_unmap(extgpu_mapping **mapping);
+/* Opt in after claim, before mapping, DMA, or IRQ setup. The SDK binds escrow
+ * to this exact client. After the vCPU and other users of the device stop,
+ * unmap the guest BARs, then retire the host BAR views with the function below.
+ * Complete releases all registered DMA and consumes window/IRQ handles only
+ * after the original DEXT broker acknowledges their retirement.
+ */
+EXTGPU_API extgpu_status extgpu_surprise_removal_arm(extgpu_device *device);
+EXTGPU_API extgpu_status extgpu_surprise_removal_unmap(extgpu_mapping **mapping);
+EXTGPU_API extgpu_status extgpu_surprise_removal_complete(extgpu_device *device,
+    extgpu_buffer **window, extgpu_irq **irq, const uint64_t bar_proof[8]);
+
 EXTGPU_API extgpu_status extgpu_mmio_read(extgpu_device *device, uint32_t memory_index,
                                uint64_t offset, uint32_t width, uint64_t *out_value);
 EXTGPU_API extgpu_status extgpu_mmio_write(extgpu_device *device, uint32_t memory_index,
@@ -328,6 +341,14 @@ EXTGPU_API extgpu_status extgpu_vm_dma_enable(extgpu_device *device, const extgp
  * also retains the backing. A successful mapping returns the actual IOVA. */
 EXTGPU_API extgpu_status extgpu_vm_dma_map(extgpu_device *device, uint64_t key,
                                   void *host_address, uint64_t bytes, extgpu_dma_coverage *out_coverage);
+/* Register a live mapping with a per-request bus address width (32–64).
+ * NULL segments requires a single contiguous IOVA; otherwise the caller
+ * provides EXTGPU_VM_DMA_MAX_SEGMENTS entries in backing order. Read the
+ * number of entries from coverage.segment_count after successful admission.
+ * The same residency and retirement contract as extgpu_vm_dma_map applies. */
+EXTGPU_API extgpu_status extgpu_vm_dma_map_constrained(extgpu_device *device, uint64_t key,
+                                  void *host_address, uint64_t bytes, uint32_t address_bits,
+                                  extgpu_vm_dma_segment *segments, extgpu_dma_coverage *coverage);
 EXTGPU_API extgpu_status extgpu_vm_dma_unmap(extgpu_device *device, uint64_t key);
 /* Driver-owned allocation. Only one allocation per connection in ABI v1. */
 EXTGPU_API extgpu_status extgpu_dma_allocate(extgpu_device *device, uint64_t bytes,

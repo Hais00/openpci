@@ -272,7 +272,7 @@
 				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "YES";
 				"CODE_SIGN_STYLE" = "Manual";
 				"COMBINE_HIDPI_IMAGES" = "YES";
-			"CURRENT_PROJECT_VERSION" = "69";
+			"CURRENT_PROJECT_VERSION" = "73";
 				"DEVELOPMENT_TEAM" = "$(READY_TEAM_ID)";
 				"ENABLE_HARDENED_RUNTIME" = "YES";
 				"GENERATE_INFOPLIST_FILE" = "YES";
@@ -283,7 +283,7 @@
 					"@executable_path/../Frameworks",
 				);
 				"MACOSX_DEPLOYMENT_TARGET" = "26.0";
-			"MARKETING_VERSION" = "1.29";
+			"MARKETING_VERSION" = "1.30";
 				"ONLY_ACTIVE_ARCH" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "org.openpci.app";
 				"PRODUCT_NAME" = "OpenPCI";
@@ -307,7 +307,7 @@
 				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "YES";
 				"CODE_SIGN_STYLE" = "Manual";
 				"COMBINE_HIDPI_IMAGES" = "YES";
-			"CURRENT_PROJECT_VERSION" = "69";
+			"CURRENT_PROJECT_VERSION" = "73";
 				"DEVELOPMENT_TEAM" = "$(READY_TEAM_ID)";
 				"ENABLE_HARDENED_RUNTIME" = "YES";
 				"GENERATE_INFOPLIST_FILE" = "YES";
@@ -318,7 +318,7 @@
 					"@executable_path/../Frameworks",
 				);
 				"MACOSX_DEPLOYMENT_TARGET" = "26.0";
-			"MARKETING_VERSION" = "1.29";
+			"MARKETING_VERSION" = "1.30";
 				"ONLY_ACTIVE_ARCH" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "org.openpci.app";
 				"PRODUCT_NAME" = "OpenPCI";
@@ -472,7 +472,7 @@
 				"CODE_SIGN_IDENTITY" = "$(READY_SIGNING_IDENTITY)";
 				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "YES";
 				"CODE_SIGN_STYLE" = "Manual";
-			"CURRENT_PROJECT_VERSION" = "69";
+			"CURRENT_PROJECT_VERSION" = "73";
 				"DEVELOPMENT_TEAM" = "$(READY_TEAM_ID)";
 				"DRIVERKIT_DEPLOYMENT_TARGET" = "25.2";
 				"GENERATE_INFOPLIST_FILE" = "YES";
@@ -483,7 +483,7 @@
 				);
 				"INFOPLIST_FILE" = "driver/Info.plist";
 				"INFOPLIST_KEY_OSBundleUsageDescription" = "Generic external GPU PCI transport; vendor initialization remains in Linux or the authorized native client.";
-			"MARKETING_VERSION" = "1.29";
+			"MARKETING_VERSION" = "1.30";
 				"ONLY_ACTIVE_ARCH" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "org.openpci.driver";
 				"PRODUCT_NAME" = "$(PRODUCT_BUNDLE_IDENTIFIER)";
@@ -506,7 +506,7 @@
 				"CODE_SIGN_IDENTITY" = "$(READY_SIGNING_IDENTITY)";
 				"CODE_SIGN_INJECT_BASE_ENTITLEMENTS" = "YES";
 				"CODE_SIGN_STYLE" = "Manual";
-			"CURRENT_PROJECT_VERSION" = "69";
+			"CURRENT_PROJECT_VERSION" = "73";
 				"DEVELOPMENT_TEAM" = "$(READY_TEAM_ID)";
 				"DRIVERKIT_DEPLOYMENT_TARGET" = "25.2";
 				"GENERATE_INFOPLIST_FILE" = "YES";
@@ -517,7 +517,7 @@
 				);
 				"INFOPLIST_FILE" = "driver/Info.plist";
 				"INFOPLIST_KEY_OSBundleUsageDescription" = "Generic external GPU PCI transport; vendor initialization remains in Linux or the authorized native client.";
-			"MARKETING_VERSION" = "1.29";
+			"MARKETING_VERSION" = "1.30";
 				"ONLY_ACTIVE_ARCH" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "org.openpci.driver";
 				"PRODUCT_NAME" = "$(PRODUCT_BUNDLE_IDENTIFIER)";

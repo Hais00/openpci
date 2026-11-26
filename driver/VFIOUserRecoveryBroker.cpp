@@ -206,6 +206,9 @@ kern_return_t VFIOUserRecoveryUserClient::ExternalMethod(uint64_t selector,IOUse
     if(selector==EXTGPU_SELECTOR_COLD_BEGIN) { inputs=5;outputs=7; }
     else if(selector==EXTGPU_SELECTOR_COLD_RETIRE) { inputs=8;outputs=10; }
     else if(selector==EXTGPU_SELECTOR_COLD_FINISH) { inputs=6;outputs=7; }
+    else if(selector==EXTGPU_SELECTOR_RELEASE_SURPRISE_REMOVAL) {
+        inputs=EXTGPU_SURPRISE_RELEASE_INPUT_COUNT;outputs=EXTGPU_SURPRISE_RELEASE_OUTPUT_COUNT;
+    }
     else return kIOReturnUnsupported;
     if(!a->scalarInput || a->scalarInputCount!=inputs || !a->scalarOutput || a->scalarOutputCount!=outputs)
         return kIOReturnBadArgument;
@@ -216,7 +219,9 @@ kern_return_t VFIOUserRecoveryUserClient::ExternalMethod(uint64_t selector,IOUse
     kern_return_t ret=ready_recovery_local_call(reinterpret_cast<VFIOUserPCIDriverUserClient *>(lease.original),
         selector,a->scalarInput,inputs,a->scalarOutput,&outputs);
     extgpu_driver::RecoveryBrokerDrop drop;
-    { TableLock lock;drop=registry.release(lease,selector==EXTGPU_SELECTOR_COLD_FINISH && ret==kIOReturnSuccess); }
+    const bool closed=ret==kIOReturnSuccess &&
+        (selector==EXTGPU_SELECTOR_COLD_FINISH || selector==EXTGPU_SELECTOR_RELEASE_SURPRISE_REMOVAL);
+    { TableLock lock;drop=registry.release(lease,closed); }
     releaseOriginal(drop.call);releaseOriginal(drop.escrow);
     if(ret==kIOReturnSuccess) a->scalarOutputCount=outputs;
     return ret;

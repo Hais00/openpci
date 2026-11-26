@@ -34,7 +34,9 @@ def configuration():
     transport = []
 
     def add_pci(name, primary, pci_class, properties):
-        match = {'IOPCIPrimaryMatch': primary, 'IOPCIClassMatch': pci_class}
+        match = {'IOPCIClassMatch': pci_class}
+        if primary is not None:
+            match['IOPCIPrimaryMatch'] = primary
         transport.append(match)
         personalities[name] = {
             **service('IOPCIDevice', PCI_SERVICE),
@@ -44,10 +46,9 @@ def configuration():
             **properties,
         }
 
-    for vendor, vendor_id in (('AMD', 0x1002), ('NVIDIA', 0x10DE), ('Intel', 0x8086)):
-        add_pci(f'OpenPCI{vendor}Display', f'0x{vendor_id:08x}&0x0000ffff', DISPLAY_CLASS, {
-            'OpenPCIUserClientProperties': user_client(DISPLAY_CLIENT),
-        })
+    add_pci('OpenPCIExternalDisplay', None, DISPLAY_CLASS, {
+        'OpenPCIUserClientProperties': user_client(DISPLAY_CLIENT),
+    })
     for model, vendor_id, audio_id in (
         ('Vega', 0x1002, 0xAAF8),
         ('RTX3090', 0x10DE, 0x1AEF),

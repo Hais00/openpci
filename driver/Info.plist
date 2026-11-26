@@ -8,7 +8,7 @@
 	<string>OpenPCI</string>
 	<key>IOKitPersonalities</key>
 	<dict>
-		<key>OpenPCIAMDDisplay</key>
+		<key>OpenPCIExternalDisplay</key>
 		<dict>
 			<key>CFBundleIdentifier</key>
 			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
@@ -16,74 +16,6 @@
 			<string>IOUserService</string>
 			<key>IOPCIClassMatch</key>
 			<string>0x03000000&amp;0xff000000</string>
-			<key>IOPCIPrimaryMatch</key>
-			<string>0x00001002&amp;0x0000ffff</string>
-			<key>IOPCITunnelCompatible</key>
-			<true/>
-			<key>IOPropertyMatch</key>
-			<dict>
-				<key>IOPCITunnelled</key>
-				<true/>
-			</dict>
-			<key>IOProviderClass</key>
-			<string>IOPCIDevice</string>
-			<key>IOUserClass</key>
-			<string>VFIOUserPCIDriver</string>
-			<key>IOUserServerName</key>
-			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-			<key>IOUserServerOneProcess</key>
-			<true/>
-			<key>OpenPCIUserClientProperties</key>
-			<dict>
-				<key>IOClass</key>
-				<string>IOUserUserClient</string>
-				<key>IOUserClass</key>
-				<string>VFIOUserPCIDriverUserClient</string>
-			</dict>
-		</dict>
-		<key>OpenPCIIntelDisplay</key>
-		<dict>
-			<key>CFBundleIdentifier</key>
-			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-			<key>IOClass</key>
-			<string>IOUserService</string>
-			<key>IOPCIClassMatch</key>
-			<string>0x03000000&amp;0xff000000</string>
-			<key>IOPCIPrimaryMatch</key>
-			<string>0x00008086&amp;0x0000ffff</string>
-			<key>IOPCITunnelCompatible</key>
-			<true/>
-			<key>IOPropertyMatch</key>
-			<dict>
-				<key>IOPCITunnelled</key>
-				<true/>
-			</dict>
-			<key>IOProviderClass</key>
-			<string>IOPCIDevice</string>
-			<key>IOUserClass</key>
-			<string>VFIOUserPCIDriver</string>
-			<key>IOUserServerName</key>
-			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-			<key>IOUserServerOneProcess</key>
-			<true/>
-			<key>OpenPCIUserClientProperties</key>
-			<dict>
-				<key>IOClass</key>
-				<string>IOUserUserClient</string>
-				<key>IOUserClass</key>
-				<string>VFIOUserPCIDriverUserClient</string>
-			</dict>
-		</dict>
-		<key>OpenPCINVIDIADisplay</key>
-		<dict>
-			<key>CFBundleIdentifier</key>
-			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-			<key>IOClass</key>
-			<string>IOUserService</string>
-			<key>IOPCIClassMatch</key>
-			<string>0x03000000&amp;0xff000000</string>
-			<key>IOPCIPrimaryMatch</key>
-			<string>0x000010de&amp;0x0000ffff</string>
 			<key>IOPCITunnelCompatible</key>
 			<true/>
 			<key>IOPropertyMatch</key>

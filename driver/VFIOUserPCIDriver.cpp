@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-#include "DirectBARPublicKey.hpp"
+
 #include <os/log.h>
 
 #include <string.h>
@@ -121,6 +121,9 @@ struct VFIOUserPCIDriverUserClient_IVars {
     bool coldFinished;
     VFIOUserPCIDriver *coldDriver; /* retained before freeze; no post-Stop PCI use */
     extgpu_driver::ColdRemovalLedger coldLedger;
+    bool surpriseArmed, surpriseStopped, surpriseFinished, surpriseDetached;
+    VFIOUserPCIDriver *surpriseDriver;
+    extgpu_driver::ColdRemovalKey surpriseKey;
     ReadyDriverLock operationLock;
     IOBufferMemoryDescriptor *mmioWindowMemory;
     openpci_mmio_window *mmioWindow;
@@ -147,6 +150,7 @@ struct VFIOUserPCIDriverUserClient_IVars {
     uint64_t activeDMABytes;
     uint64_t dmaByteBudget;
     IOAddressSegment vmDMASegments[EXTGPU_VM_DMA_SEGMENT_LIMIT];
+    uint64_t vmDMASegmentKey;
     uint32_t vmDMASegmentCount;
     uint64_t dmaCompleteFailureCount;
     uint64_t dmaRetirementFailuresPending;
@@ -369,8 +373,7 @@ static kern_return_t vfio_user_read_identity(IOService *service, VFIOUserPCIDevi
     return kIOReturnSuccess;
 }
 
-/* Common transport: AMD/NVIDIA/Intel display-class PCI functions only,
- * any device/subsystem, with the actual PCI provider explicitly tunneled.
+/* Common transport: any tunneled display-class PCI function.
  * Matching registers an idle service. Linux owns vendor initialization.
  */
 static kern_return_t ready_validate_external_gpu(IOPCIDevice *pciDevice)
@@ -385,10 +388,9 @@ static kern_return_t ready_validate_external_gpu(IOPCIDevice *pciDevice)
     uint32_t vendor = 0, classCode = 0;
     const bool valid = ready_pci_property(properties, "vendor-id", &vendor) &&
                        ready_pci_property(properties, "class-code", &classCode);
-    const bool supportedVendor = vendor == 0x1002 || vendor == 0x10de || vendor == 0x8086;
     const bool tunneled = properties->getObject("IOPCITunnelled") == kOSBooleanTrue;
     properties->release();
-    if (!valid || !supportedVendor || (classCode & 0x00ff0000) != 0x00030000) {
+    if (!valid || (classCode & 0x00ff0000) != 0x00030000) {
         os_log(OS_LOG_DEFAULT, "ready-vfio: refusing out-of-scope PCI registry identity vendor=%x class=%x", vendor, classCode);
         return kIOReturnUnsupported;
     }
@@ -619,7 +621,8 @@ static kern_return_t vfio_user_allocate_dma_buffer(VFIOUserPCIDriverUserClient *
 static kern_return_t vfio_user_register_client_dma_region(VFIOUserPCIDriverUserClient *client,
                                                           uint64_t key, uint64_t address,
                                                           uint64_t bytes,
-                                                          IOAddressSegment *busSegment, bool segmented, bool dynamic)
+                                                          IOAddressSegment *busSegment, bool segmented, bool dynamic,
+                                                          uint32_t addressBits)
 {
     auto &state = *client->ivars;
     if (!bytes || !address) return kIOReturnBadArgument;
@@ -644,6 +647,7 @@ static kern_return_t vfio_user_register_client_dma_region(VFIOUserPCIDriverUserC
     }
     if (!slot) return kIOReturnNoSpace;
 
+    if (!addressBits) addressBits = state.dmaAddressBits;
     ClientDMARegistration prepared{};
     const IOAddressSegment clientRange{address, bytes};
     auto status = client->CreateMemoryDescriptorFromClient(kIOMemoryDirectionOutIn, 1,
@@ -653,7 +657,7 @@ static kern_return_t vfio_user_register_client_dma_region(VFIOUserPCIDriverUserC
     uint64_t flags = 0;
     uint32_t count = 0;
     if (status == kIOReturnSuccess)
-        status = prepare_dma(device, prepared.memory, state.dmaAddressBits,
+        status = prepare_dma(device, prepared.memory, addressBits,
                              bytes, &prepared.command, &flags, segments, &count);
     if (status != kIOReturnSuccess) {
         OSSafeReleaseNULL(prepared.memory);
@@ -668,8 +672,8 @@ static kern_return_t vfio_user_register_client_dma_region(VFIOUserPCIDriverUserC
     prepared.bytes = bytes;
     prepared.vmSegmented = segmented;
     prepared.vmDynamic = dynamic;
-    prepared.fullCoverage = segmented ? dma_segments_cover_request(segments, count, bytes, state.dmaAddressBits) :
-        dma_covers_request(segments[0], count, bytes, state.dmaAddressBits);
+    prepared.fullCoverage = segmented ? dma_segments_cover_request(segments, count, bytes, addressBits) :
+        dma_covers_request(segments[0], count, bytes, addressBits);
     *slot = prepared;
     ++state.activeDMARegionCount;
     state.activeDMABytes += bytes;
@@ -678,6 +682,7 @@ static kern_return_t vfio_user_register_client_dma_region(VFIOUserPCIDriverUserC
         if (segmented) {
             memcpy(state.vmDMASegments, segments, count * sizeof(segments[0]));
             state.vmDMASegmentCount = count;
+            state.vmDMASegmentKey = key;
         }
         *busSegment = segments[0];
         return kIOReturnSuccess;
@@ -1481,7 +1486,18 @@ IMPL(VFIOUserPCIDriverUserClient, Stop)
             state->irqMailbox = nullptr;
             OSSafeReleaseNULL(state->irqMailboxMemory);
         }
-        if (state->coldPrepared || state->coldFrozen) {
+        if (state->surpriseArmed) {
+            state->surpriseStopped = true;
+            auto *driver = state->surpriseDriver;
+            if (state->claimed && !state->ownerReleased && driver && driver->ivars) {
+                ReadyProviderLock device(&driver->ivars->stateLock);
+                driver->ivars->quarantined = true;
+                driver->ivars->quarantinedClientState = state;
+                ready_clear_bar_cache_locked(driver);
+            }
+            vfio_user_release_all_interrupts(this);
+            frozenStop = true;
+        } else if (state->coldPrepared || state->coldFrozen) {
             /* Stop/deactivation is not physical-off evidence. Keep the old
              * endpoint's recovery state/lock reachable, with no automatic
              * CompleteDMA, IRQ operation, PCI access or reference release. */
@@ -1775,6 +1791,123 @@ static kern_return_t ready_cold_begin_reply(VFIOUserPCIDriverUserClient *client,
     return kIOReturnSuccess;
 }
 
+static bool ready_verify_bar_signature(const uint64_t challenge[3], uint64_t domain,
+                                       const uint64_t *signature)
+{
+    const uint64_t words[] = {domain, challenge[0], challenge[1], challenge[2]};
+    static constexpr uint8_t key[32] = {0xee, 0x2f, 0x50, 0x41, 0x72, 0x99, 0x92, 0x14, 0x63, 0x3e, 0xd4, 0x1b, 0xf1, 0x1a, 0xd4, 0xa, 0x94, 0x29, 0xef, 0xa2, 0x27, 0x39, 0x32, 0x3d, 0xf2, 0xf4, 0xf0, 0x65, 0x83, 0x6e, 0x10, 0xf5};
+    return cced25519_verify(ccsha512_di(), sizeof words, words,
+                reinterpret_cast<const uint8_t *>(signature), key) == 0;
+}
+
+static bool ready_hypervisor_client_entitled(VFIOUserPCIDriverUserClient *client);
+
+static kern_return_t ready_arm_surprise_removal(VFIOUserPCIDriverUserClient *client,
+    VFIOUserPCIDriver *driver, IOUserClientMethodArguments *args)
+{
+    auto *state = client->ivars;
+    const auto *in = args->scalarInput;
+    if (!in || args->scalarInputCount != EXTGPU_RECOVERY_ESCROW_INPUT_COUNT ||
+        !args->scalarOutput || args->scalarOutputCount != EXTGPU_RECOVERY_PREPARE_OUTPUT_COUNT)
+        return kIOReturnBadArgument;
+    if (!ready_hypervisor_client_entitled(client) || state->dmaRequested ||
+        state->barMappingIssued || !ready_cold_irq_empty(state)) return kIOReturnNotPermitted;
+
+    const auto key = ready_cold_key(in);
+    uint64_t brokerID = 0;
+    if (state->surpriseArmed) {
+        const auto ret = ready_recovery_prepared_reply(client, in, in + 5, &brokerID);
+        if (ret != kIOReturnSuccess) return ret;
+    } else {
+        ReadyProviderLock device(&driver->ivars->stateLock);
+        const auto owner = ready_owner_status_locked(client, driver, key.generation);
+        if (owner != kIOReturnSuccess) return owner;
+        auto *pci = vfio_user_get_pci_device(driver);
+        uint64_t serviceID = 0, pciID = 0;
+        if (!pci || driver->GetRegistryEntryID(&serviceID) != kIOReturnSuccess ||
+            pci->GetRegistryEntryID(&pciID) != kIOReturnSuccess) return kIOReturnNotAttached;
+        if (key.serviceID != serviceID || key.pciID != pciID) return kIOReturnNotPermitted;
+        const auto ret = ready_recovery_reserve(client, in, in + 5, 0, &brokerID);
+        if (ret != kIOReturnSuccess) return ret;
+        state->surpriseKey = key;
+        state->surpriseDriver = driver;
+        driver->retain();
+        state->surpriseArmed = true;
+        ready_recovery_publish(client);
+    }
+    ready_cold_write_key(args->scalarOutput, key);
+    args->scalarOutput[5] = brokerID;
+    return kIOReturnSuccess;
+}
+
+static kern_return_t ready_release_surprise_removal(VFIOUserPCIDriverUserClient *client,
+                                                    const uint64_t *in, uint64_t *out)
+{
+    auto *state = client->ivars;
+    const auto key = ready_cold_key(in);
+    if (!state->surpriseArmed || !extgpu_driver::same_cold_removal_key(key, state->surpriseKey) ||
+        in[5] > 1) return kIOReturnNotPermitted;
+    const bool detached = in[5] == 1;
+    if (state->surpriseFinished) {
+        if (detached != state->surpriseDetached) return kIOReturnNotPermitted;
+    } else if (detached) {
+        /* The broker owner has checked the exact old PCI service disappeared.
+         * Local Stop and a drained VMM are required before touching mappings.
+         * No configuration reads/writes or calls to a replacement PCI device. */
+        auto *driver = state->surpriseDriver;
+        if (!state->surpriseStopped || !driver || !driver->ivars) return kIOReturnNotReady;
+        {
+            ReadyProviderLock device(&driver->ivars->stateLock);
+            if (!driver->ivars->stopping) return kIOReturnNotReady;
+        }
+        if (state->barMappingIssued &&
+            (!state->authFullVM ||
+             !ready_verify_bar_signature(state->authProbeChallenge, EXTGPU_SURPRISE_BAR_DOMAIN, in + 6)))
+            return kIOReturnNotPermitted;
+        if (!ready_cold_irq_empty(state)) {
+            const auto status = ready_retire_interrupts(client);
+            if (status != kIOReturnSuccess) return status;
+        }
+        if (state->warmAudioOwner) {
+            auto *audio = state->warmAudioOwner;
+            {
+                ReadyProviderLock companion(&audio->ivars->stateLock);
+                if (!audio->ivars->stopping) return kIOReturnNotReady;
+                audio->ivars->resetCompanionInUse = false;
+            }
+            state->warmAudioOwner = nullptr;
+            audio->release();
+        }
+        for (uint32_t i = 0; state->clientDMARegions && i < EXTGPU_MAX_DMA_REGIONS; ++i) {
+            auto &region = state->clientDMARegions[i];
+            if (!region.command && !region.memory) continue;
+            if (!region.command || !region.memory) return kIOReturnNotReady;
+            const auto status = retire_registration(*state, region);
+            if (status != kIOReturnSuccess) return status;
+        }
+        if (!ready_cold_regions_empty(state)) return kIOReturnNotReady;
+        {
+            ReadyProviderLock device(&driver->ivars->stateLock);
+            if (driver->ivars->openerClient == client) {
+                driver->ivars->openerClient = nullptr;
+                driver->ivars->providerClaimed = false;
+                driver->ivars->providerClaimRefs = 0;
+            }
+            if (driver->ivars->quarantinedClientState == state)
+                driver->ivars->quarantinedClientState = nullptr;
+        }
+        state->claimed = false;
+        state->ownerReleased = true;
+        state->surpriseDetached = true;
+    } else if (!state->ownerReleased || !ready_cold_regions_empty(state) || !ready_cold_irq_empty(state)) {
+        return kIOReturnNotReady;
+    }
+    state->surpriseFinished = true;
+    ready_cold_write_key(out, key);
+    out[5] = in[5];
+    return kIOReturnSuccess;
+}
+
 static kern_return_t ready_cold_prepare(VFIOUserPCIDriverUserClient *client,
                                       VFIOUserPCIDriver *driver,
                                       IOUserClientMethodArguments *arguments)
@@ -1782,7 +1915,7 @@ static kern_return_t ready_cold_prepare(VFIOUserPCIDriverUserClient *client,
     auto *state = client->ivars;
     const auto key = ready_cold_key(arguments->scalarInput);
     if (!extgpu_driver::valid_cold_removal_key(key)) return kIOReturnBadArgument;
-    if (state->barMappingIssued || state->dmaBuffer || state->dmaCommand ||
+    if (state->surpriseArmed || state->barMappingIssued || state->dmaBuffer || state->dmaCommand ||
         state->dmaBufferSize || state->dmaBufferRetirementFailed ||
         state->dmaRetirementFailuresPending || !ready_cold_irq_empty(state)) return kIOReturnUnsupported;
     if (state->activeDMARegionCount > EXTGPU_MAX_DMA_REGIONS) return kIOReturnNoSpace;
@@ -1979,10 +2112,16 @@ kern_return_t ready_recovery_local_call(VFIOUserPCIDriverUserClient *client, uin
     if (selector == EXTGPU_SELECTOR_COLD_BEGIN) { expectedIn = 5; expectedOut = 7; }
     else if (selector == EXTGPU_SELECTOR_COLD_RETIRE) { expectedIn = 8; expectedOut = 10; }
     else if (selector == EXTGPU_SELECTOR_COLD_FINISH) { expectedIn = 6; expectedOut = 7; }
+    else if (selector == EXTGPU_SELECTOR_RELEASE_SURPRISE_REMOVAL) {
+        expectedIn = EXTGPU_SURPRISE_RELEASE_INPUT_COUNT;
+        expectedOut = EXTGPU_SURPRISE_RELEASE_OUTPUT_COUNT;
+    }
     else return kIOReturnUnsupported;
     if (inputCount != expectedIn || *outputCount != expectedOut) return kIOReturnBadArgument;
     auto *state = client->ivars;
     ReadyProviderLock operation(&state->operationLock);
+    if (selector == EXTGPU_SELECTOR_RELEASE_SURPRISE_REMOVAL)
+        return ready_release_surprise_removal(client, input, output);
     if (!state->coldPrepared || !state->coldFrozen || !state->coldBMEAcknowledged) return kIOReturnNotReady;
     if (!extgpu_driver::same_cold_removal_key(ready_cold_key(input), state->coldLedger.key))
         return kIOReturnNotPermitted;
@@ -2009,7 +2148,12 @@ kern_return_t ready_recovery_local_call(VFIOUserPCIDriverUserClient *client, uin
 void VFIOUserPCIDriverUserClient::free()
 {
     auto *state = ivars;
-    if (state && (state->coldPrepared || state->coldFrozen)) {
+    if (state && state->surpriseArmed && state->surpriseFinished) {
+        auto *driver = state->surpriseDriver;
+        ivars = nullptr;
+        release_client_state(state);
+        driver->release();
+    } else if (state && (state->coldPrepared || state->coldFrozen)) {
         auto *driver = state->coldDriver;
         bool dispose = false;
         {
@@ -2975,13 +3119,7 @@ VFIOUserPCIDriverUserClient::ExternalMethod(uint64_t selector,
         const uint64_t domain = selector == 0x7e11 ? UINT64_C(0x4f504155544834) :
             selector == 0x7e10 ? UINT64_C(0x4f504155544833) :
             selector == 0x7e01 ? UINT64_C(0x4f504155544831) : UINT64_C(0x4f504155544832);
-        const uint64_t words[] = {domain,
-            ivars->authProbeChallenge[0],
-            ivars->authProbeChallenge[1], ivars->authProbeChallenge[2]};
-        if (!openpci_direct_bar_key_configured) return kIOReturnUnsupported;
-        const auto &key = openpci_direct_bar_public_key;
-        if (cced25519_verify(ccsha512_di(), sizeof words, words,
-                reinterpret_cast<const uint8_t *>(arguments->scalarInput), key) != 0)
+        if (!ready_verify_bar_signature(ivars->authProbeChallenge, domain, arguments->scalarInput))
             return kIOReturnNotPermitted;
         if (selector == 0x7e01 || selector == 0x7e10) {
             ivars->authProbeUsed = true;
@@ -3049,10 +3187,12 @@ VFIOUserPCIDriverUserClient::ExternalMethod(uint64_t selector,
             EXTGPU_CAP_WARM_VM_RTX3090_RELEASE | EXTGPU_CAP_WARM_VM_POLARIS_RELEASE |
             EXTGPU_CAP_PREFETCHABLE_BAR_WORDS | EXTGPU_CAP_WARM_VM_NO_DMA_RELEASE | EXTGPU_CAP_MMIO_WINDOW |
             EXTGPU_CAP_IRQ_DRAIN_AND_REARM | EXTGPU_CAP_IRQ_SHARED_NOTIFICATION | EXTGPU_CAP_CONFIGURABLE_DMA_BUDGET |
-            EXTGPU_CAP_VM_DMA_SEGMENTS | EXTGPU_CAP_VM_DYNAMIC_DMA | EXTGPU_CAP_MMIO_WINDOW_WORD_WRITES |
+            EXTGPU_CAP_VM_DMA_SEGMENTS | EXTGPU_CAP_VM_DYNAMIC_DMA | EXTGPU_CAP_VM_DMA_CONSTRAINED |
+            EXTGPU_CAP_MMIO_WINDOW_WORD_WRITES |
             EXTGPU_CAP_MMIO_RING | EXTGPU_CAP_MMIO_RING_POLL | EXTGPU_CAP_MMIO_RING_ADAPTIVE |
             EXTGPU_CAP_MMIO_RING_IRQ_ARM | EXTGPU_CAP_MMIO_RING_EVENT |
-            EXTGPU_CAP_MMIO_RING_GROUPED_STORES | EXTGPU_CAP_VM_GROUP_PREFLIGHT;
+            EXTGPU_CAP_MMIO_RING_GROUPED_STORES | EXTGPU_CAP_VM_GROUP_PREFLIGHT |
+            EXTGPU_CAP_SURPRISE_REMOVAL;
         if (ownedDriver->ivars->quarantined || ivars->dmaRetirementFailuresPending != 0 || ivars->irqCancelFailure != kIOReturnSuccess) features |= EXTGPU_STATE_QUARANTINED;
         const uint64_t result[8] = {EXTGPU_PROTOCOL_MAJOR, EXTGPU_PROTOCOL_MINOR, ownedDriver->ivars->generation,
             features, EXTGPU_MAX_DMA_REGIONS, ivars->dmaByteBudget, EXTGPU_MAX_RETURNED_SEGMENTS, EXTGPU_PROTOCOL_FINGERPRINT};
@@ -3083,6 +3223,8 @@ VFIOUserPCIDriverUserClient::ExternalMethod(uint64_t selector,
         kern_return_t owner = ready_owner_status(this);
         if (owner != kIOReturnSuccess) return owner;
     }
+    if (selector == EXTGPU_SELECTOR_ARM_SURPRISE_REMOVAL)
+        return ready_arm_surprise_removal(this, ownedDriver, arguments);
     if (selector == EXTGPU_SELECTOR_VM_FLR_PREFLIGHT)
         return ready_vm_flr_preflight(this, ownedDriver, arguments);
     if (selector == EXTGPU_SELECTOR_SET_DMA_BUDGET) {
@@ -3124,7 +3266,8 @@ VFIOUserPCIDriverUserClient::ExternalMethod(uint64_t selector,
             request[0] != ivars->negotiatedGeneration || request[2] >= ivars->vmDMASegmentCount)
             return kIOReturnBadArgument;
         const auto *region = find_dma_region(*ivars, request[1]);
-        if (!region || !region->vmSegmented || !region->fullCoverage || ivars->activeDMARegionCount != 1)
+        if (request[1] != ivars->vmDMASegmentKey || !region || !region->vmSegmented ||
+            !region->fullCoverage || (!region->vmDynamic && ivars->activeDMARegionCount != 1))
             return kIOReturnNotFound;
         const auto &segment = ivars->vmDMASegments[request[2]];
         reply[0] = segment.address;
@@ -3149,7 +3292,8 @@ VFIOUserPCIDriverUserClient::ExternalMethod(uint64_t selector,
         return ready_cold_prepare(this, ownedDriver, arguments);
     }
     const bool segmented = selector == EXTGPU_SELECTOR_REGISTER_VM_DMA;
-    const bool dynamic = selector == EXTGPU_SELECTOR_REGISTER_VM_DYNAMIC_DMA;
+    const bool constrained = selector == EXTGPU_SELECTOR_REGISTER_VM_DMA_CONSTRAINED;
+    const bool dynamic = constrained || selector == EXTGPU_SELECTOR_REGISTER_VM_DYNAMIC_DMA;
     if (dynamic && !ivars->dynamicDMAWindow.bytes) return kIOReturnNotPermitted;
     if (!dynamic && ivars->dynamicDMAWindow.bytes && (segmented || selector == EXTGPU_SELECTOR_REGISTER_DMA_REGION))
         return kIOReturnNotPermitted;
@@ -3245,14 +3389,20 @@ VFIOUserPCIDriverUserClient::ExternalMethod(uint64_t selector,
         return vfio_user_release_dma_buffer(this);
     case EXTGPU_SELECTOR_REGISTER_DMA_REGION:
     case EXTGPU_SELECTOR_REGISTER_VM_DMA:
-    case EXTGPU_SELECTOR_REGISTER_VM_DYNAMIC_DMA: {
+    case EXTGPU_SELECTOR_REGISTER_VM_DYNAMIC_DMA:
+    case EXTGPU_SELECTOR_REGISTER_VM_DMA_CONSTRAINED: {
         if (inCount < 3 || outCount < 3) return kIOReturnBadArgument;
         if (dynamic && ((in[0] | in[1] | in[2]) & UINT64_C(0x3fff))) return kIOReturnBadArgument;
+        if (constrained && (inCount != 5 || in[3] < 32 || in[3] > 64 || in[4] > 1))
+            return kIOReturnBadArgument;
+        const bool returnSegments = segmented || (constrained && in[4]);
+        const uint32_t addressBits = constrained ? static_cast<uint32_t>(in[3]) : 0;
         IOAddressSegment segment{};
-        const auto status = vfio_user_register_client_dma_region(this, in[0], in[1], in[2], &segment, segmented, dynamic);
+        const auto status = vfio_user_register_client_dma_region(this, in[0], in[1], in[2],
+            &segment, returnSegments, dynamic, addressBits);
         if (status != kIOReturnSuccess) return status;
-        const uint64_t fields[] = {segmented ? ivars->vmDMASegmentCount : 1u, segment.address,
-                                   segmented ? in[2] : segment.length};
+        const uint64_t fields[] = {returnSegments ? ivars->vmDMASegmentCount : 1u, segment.address,
+                                   returnSegments ? in[2] : segment.length};
         memcpy(out, fields, sizeof(fields));
         arguments->scalarOutputCount = 3;
         return kIOReturnSuccess;

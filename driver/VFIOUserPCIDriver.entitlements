@@ -9,20 +9,6 @@
 		<dict>
 			<key>IOPCIClassMatch</key>
 			<string>0x03000000&amp;0xff000000</string>
-			<key>IOPCIPrimaryMatch</key>
-			<string>0x00001002&amp;0x0000ffff</string>
-		</dict>
-		<dict>
-			<key>IOPCIClassMatch</key>
-			<string>0x03000000&amp;0xff000000</string>
-			<key>IOPCIPrimaryMatch</key>
-			<string>0x000010de&amp;0x0000ffff</string>
-		</dict>
-		<dict>
-			<key>IOPCIClassMatch</key>
-			<string>0x03000000&amp;0xff000000</string>
-			<key>IOPCIPrimaryMatch</key>
-			<string>0x00008086&amp;0x0000ffff</string>
 		</dict>
 		<dict>
 			<key>IOPCIClassMatch</key>
